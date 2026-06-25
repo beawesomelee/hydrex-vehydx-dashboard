@@ -33,7 +33,12 @@ if R:
     check("every row has all required fields", not miss, f"missing on ranks {miss[:5]}")
     check("confidence values valid", all(r["confidence"] in ("high","medium","low") for r in R))
     check("entity_type values valid", all(r["entity_type"] in
-          ("hydrex_treasury_or_team","partner_project","individual_whale","alm_vault","market_maker","unknown") for r in R))
+          ("hydrex_treasury_or_team","partner_project","individual_whale","alm_vault","managed_lock","market_maker","unknown") for r in R))
+    TREAS={"0xea1bf482b7d3526ccf37a8a3fee330c960877f08","0x813f98f0f29509d558b2479d8ee0c8068c160bd3","0xb4d2861d525aef313be0c497c3335a58f637e73e"}
+    bad_team=[r["rank"] for r in R if r["entity_type"]=="hydrex_treasury_or_team"
+              and not (r.get("treasury_signer_match") or r["wallet"].lower() in TREAS)]
+    check("'team/treasury' asserted only with signer evidence (no codehash over-attribution)",
+          not bad_team, f"ranks {bad_team} labeled team without a treasury-signer match")
 
 print("\n== B. history sanity (regression: false-idle from RPC failures) ==")
 if H:
@@ -66,9 +71,11 @@ if R:
     def restyle(r):
         if r["epochs_voted"]==0 or not r["dom_pool"]: return "Idle"
         n=r["avg_pools_per_epoch"]; ds=r["dom_share"]; dp=r["distinct_pools"]
-        if n<=3 and ds>=0.7: return "Loyal"
-        if n<=6 and (ds>=0.5 or dp<=3): return "Focused"
-        return "Fee Focus"
+        if n<=3 and ds>=0.7: s="Loyal"
+        elif n<=6 and (ds>=0.5 or dp<=3): s="Focused"
+        else: s="Fee Focus"
+        if s=="Fee Focus" and r["epochs_voted"]<3: s="Occasional"  # too few votes to call mercenary
+        return s
     drift=[r["rank"] for r in R if restyle(r)!=r["voting_style"]]
     check("stored voting_style matches its own metrics (no logic drift)", not drift, f"ranks {drift[:5]}")
 

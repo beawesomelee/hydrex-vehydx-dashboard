@@ -3,7 +3,9 @@ from collections import Counter
 R=json.load(open("vehydx_top100_labeled.json"))
 TOTAL=454586648.0; HOLDERS=3780; TREASURY_PCT=61.65
 team=sum(r["vehydx"] for r in R if r["entity_type"]=="hydrex_treasury_or_team")
-hydrex_ctrl = TREASURY_PCT + team/TOTAL*100
+managed=sum(r["vehydx"] for r in R if r["entity_type"]=="managed_lock")
+hydrex_ctrl = TREASURY_PCT + team/TOTAL*100          # verified Hydrex only (treasury + signer team)
+managed_pct = managed/TOTAL*100                       # Hydrex-managed locks, owner unverified
 top100sum=sum(r["vehydx"] for r in R)
 by_type={}
 for r in R: by_type[r["entity_type"]]=by_type.get(r["entity_type"],0)+r["vehydx"]
@@ -13,7 +15,7 @@ for r in R:
 
 ROWS=json.dumps(R)
 TYPE=json.dumps([[k,round(v/1e6,2)] for k,v in sorted(by_type.items(),key=lambda x:-x[1])])
-DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,
+DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"managed_pct":round(managed_pct,1),
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
                  "styles":dict(style_ct)})
 
@@ -46,8 +48,10 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .vs-Focused{background:rgba(57,212,207,.16);color:var(--cyan)}
 .vs-FeeFocus{background:rgba(210,153,34,.16);color:var(--orange)}
 .vs-Idle{background:rgba(139,148,158,.14);color:var(--muted)}
+.vs-Occasional{background:rgba(139,148,158,.14);color:var(--muted)}
 .et{font-size:9.5px;padding:1px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
 .et-hydrex_treasury_or_team{background:rgba(188,140,255,.15);color:var(--purple)}
+.et-managed_lock{background:rgba(188,140,255,.09);color:#b89bd6}
 .et-partner_project{background:rgba(63,185,80,.15);color:var(--green)}
 .et-individual_whale{background:rgba(88,166,255,.12);color:var(--accent)}
 .et-unknown{background:rgba(139,148,158,.12);color:var(--muted)}.et-alm_vault{background:rgba(255,123,114,.15);color:var(--pink)}
@@ -93,14 +97,14 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 const ROWS=__ROWS__, TYPE=__TYPE__, D=__DATA__;
 const VE=n=>(n>=1e6?(n/1e6).toFixed(2)+'M':(n/1e3).toFixed(0)+'K');
 const sc=a=>a.slice(0,6)+'…'+a.slice(-4);
-const tn={hydrex_treasury_or_team:'Hydrex team/treasury',partner_project:'Partner projects',individual_whale:'Individual whales',alm_vault:'ALM vault',unknown:'Unknown'};
-const tnShort={hydrex_treasury_or_team:'team',partner_project:'partner',individual_whale:'individual',alm_vault:'vault',unknown:'unknown'};
+const tn={hydrex_treasury_or_team:'Hydrex team/treasury',managed_lock:'Hydrex managed-lock (unverified)',partner_project:'Partner projects',individual_whale:'Individual whales',alm_vault:'ALM vault',unknown:'Unknown'};
+const tnShort={hydrex_treasury_or_team:'team',managed_lock:'mgd-lock?',partner_project:'partner',individual_whale:'individual',alm_vault:'vault',unknown:'unknown'};
 const vsClass=s=>'vs-'+s.replace(' ','');
 document.getElementById('cards').innerHTML=[
  ['Total voting power',VE(D.total),D.holders.toLocaleString()+' holders'],
- ['Hydrex-controlled',D.hydrex_ctrl+'%','treasury + team wallets'],
+ ['Hydrex (verified)',D.hydrex_ctrl+'%','treasury + signer team · +'+D.managed_pct+'% managed-locks'],
  ['#1 Treasury Safe',D.treasury_pct+'%','votes a void sink gauge'],
- ['Contestable',(100-D.hydrex_ctrl).toFixed(1)+'%','everyone else'],
+ ['Contestable',(100-D.hydrex_ctrl-D.managed_pct).toFixed(1)+'%','non-Hydrex holders'],
  ['Loyal / Focused',(D.styles.Loyal||0)+(D.styles.Focused||0)+' of 100','aligned voters (vs '+(D.styles['Fee Focus']||0)+' mercenary)'],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
@@ -110,7 +114,7 @@ const bk=ROWS.filter(r=>r.voting_style==='Loyal'&&r.entity_type!=='hydrex_treasu
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.likely_who}</b> <span class="m">${VE(r.vehydx)}</span> &mdash; ${r.dom_pool} ${r.epochs_voted}/${r.epochs_total}ep</div>`).join('')||'—';
 document.getElementById('styleline').innerHTML=`likely identity, how they vote across 10 epochs, and confidence &middot; <b style="color:var(--green)">${D.styles.Loyal||0} Loyal</b> &middot; <b style="color:var(--cyan)">${D.styles.Focused||0} Focused</b> &middot; <b style="color:var(--orange)">${D.styles['Fee Focus']||0} Fee Focus</b> &middot; <b style="color:var(--muted)">${D.styles.Idle||0} Idle</b>`;
 let styleFilter='All';
-const chips=['All','Loyal','Focused','Fee Focus','Idle'];
+const chips=['All','Loyal','Focused','Fee Focus','Occasional','Idle'];
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(c=>`<span class="chip ${c===styleFilter?'on':''}" onclick="setStyle('${c}')">${c}</span>`).join('');}
 function setStyle(s){styleFilter=s;renderChips();render();}
 let sk='rank',sd=1;
@@ -124,7 +128,7 @@ function render(){
   <td><span class="who">${r.likely_who}</span><span class="et et-${r.entity_type}">${tnShort[r.entity_type]||r.entity_type}</span></td>
   <td class="n">${VE(r.vehydx)}</td><td class="n">${r.pct}%</td>
   <td class="n">${r.epochs_voted}/${r.epochs_total}</td>
-  <td><span class="vs ${vsClass(r.voting_style)}">${r.voting_style}</span>${r.dom_pool?` <span class="tvpool">${r.dom_pool}</span><div class="sub2">${Math.round(r.dom_share*100)}% of votes · ${r.avg_pools_per_epoch} pools/ep</div>`:''}</td>
+  <td><span class="vs ${vsClass(r.voting_style)}">${r.voting_style}</span>${r.dom_pool?` <span class="tvpool">${r.dom_pool}</span><div class="sub2">top in ${Math.round(r.dom_share*r.epochs_voted)}/${r.epochs_voted}ep · spreads ${r.avg_pools_per_epoch} pools/ep</div>`:''}</td>
   <td><span class="badge b-${r.confidence}">${r.confidence}</span></td>
   <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)} ↗</a></td>
  </tr>`).join('');

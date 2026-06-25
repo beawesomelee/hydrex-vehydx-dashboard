@@ -1,29 +1,34 @@
 import json, csv
-from collections import Counter
+from collections import Counter, defaultdict
 F=json.load(open("top100_facts.json"))["facts"]
 H=json.load(open("top100_history.json"))
 prior={p["wallet"].lower():p for p in json.load(open("vehydx_labels.json"))}
+# Hydrex treasury multisig signers — a wallet that IS one of these (EOA) is team too
+TREAS={"0xea1bf482b7d3526ccf37a8a3fee330c960877f08","0x813f98f0f29509d558b2479d8ee0c8068c160bd3","0xb4d2861d525aef313be0c497c3335a58f637e73e"}
 
 def partner_of(name):
     n=name.lower()
     for tok,proj in [("metacademax","Metacade"),("mcade","Metacade"),("theo","Autheo"),
         ("betr","Betr"),("nock","Nockchain"),("fxusd","f(x) Protocol"),("dextf","Memento/DEXTF"),
-        ("lfi","LFI"),("bnkr","Bankr"),("wtsgov","wtSGOV/RWA"),("wtcoin","wtCOIN/RWA"),("wtmstr","wtMSTR/RWA"),
-        ("eurc","Circle EURC"),("auki","Auki"),("degen","Degen"),("fuego","Fuego"),("40a","40 Acres"),
-        ("vvv","Venice"),("rfl","Reflect"),("kvcm","kVCM")]:
+        ("lfi","LFI"),("bnkr","Bankr"),("clanker","Clanker"),("wtsgov","wtSGOV/RWA"),("wtcoin","wtCOIN/RWA"),
+        ("wtmstr","wtMSTR/RWA"),("eurc","Circle EURC"),("auki","Auki"),("degen","Degen"),("fuego","Fuego"),
+        ("40a","40 Acres"),("vvv","Venice"),("rfl","Reflect"),("kvcm","kVCM"),
+        ("azusd","Azos Finance"),("tgn","Treegens"),("regen","Regen Network"),("tibbir","Ribbita/TIBBIR")]:
         if tok in n: return proj
     return None
 
-# codehash clusters seeded by prior agent labels (one ID extends to identical contracts)
-ch2type=Counter(); ch_examples={}
+# Codehash clusters seeded by prior agent labels. A codehash with MIXED seed types
+# (e.g. 0x8203 = team manager + PartnerEscrow + 40 Acres vault) is a GENERIC managed-lock
+# template that does NOT prove ownership — never propagate a specific identity from it.
+ch_types=defaultdict(set); ch_first_label={}
 for f in F:
     pl=prior.get(f["wallet"].lower())
     if pl and f["codehash"]!="EOA":
-        ch2type[(f["codehash"],pl["entity_type"])]+=1
-        ch_examples.setdefault(f["codehash"],pl["label"])
+        ch_types[f["codehash"]].add(pl["entity_type"]); ch_first_label.setdefault(f["codehash"],pl["label"])
 cluster_label={}
-for (ch,et),_ in ch2type.most_common():
-    cluster_label.setdefault(ch,(et,ch_examples.get(ch,"")))
+for ch,types in ch_types.items():
+    cluster_label[ch]=("managed_lock","Hydrex managed-lock (owner unverified)") if len(types)>1 \
+                      else (next(iter(types)), ch_first_label[ch])
 
 def behavior(w):
     h=H.get(w,{})
@@ -74,31 +79,43 @@ def short(lbl):
     if ".eth" in l or ".base" in l: return lbl.split(" ")[0]
     if "metacade" in l: return "Metacade-aligned"
     if "memento" in l or "dextf" in l: return "Memento/DEXTF"
-    return lbl[:34]
+    if "managed-lock" in l or "managed lock" in l: return "Hydrex managed-lock (unverified)"
+    if "smart-contract voter" in l or "spread votes" in l: return "unknown contract (spreader)"
+    if "individual" in l: return "individual (smart wallet)"
+    return lbl[:40].rstrip()
 
 rows=[]
 for f in F:
-    w=f["wallet"]; pl=prior.get(w.lower())
+    w=f["wallet"]; pl=prior.get(w.lower()); prof=vote_profile(w)
     beh, mode, consistency = behavior(w)
     partner = partner_of(mode) if (mode and consistency>=0.6) else None
+    loyal_partner = partner_of(mode) if (mode and prof["voting_style"] in ("Loyal","Focused")) else None
     # --- owner identity (priority) ---
     who="unknown"; et="unknown"; conf="low"
-    if f.get("treasury_signer_match"):
-        who="Hydrex team/treasury Safe"; et="hydrex_treasury_or_team"; conf="high"
+    if f.get("treasury_signer_match") or w.lower() in TREAS:
+        who="Hydrex team/treasury (signer-verified)"; et="hydrex_treasury_or_team"; conf="high"
     elif f["codehash"] in cluster_label:
-        et,lbl=cluster_label[f["codehash"]]
-        if et=="individual_whale": who="individual (smart wallet)"; conf="low"  # cluster = wallet TYPE, not a partner
-        else: who=short(lbl); conf="medium"  # codehash-only (admin not re-verified) => medium, not high
+        cet,lbl=cluster_label[f["codehash"]]
+        if cet=="individual_whale": who="individual (smart wallet)"; et="individual_whale"; conf="low"
+        elif cet in ("managed_lock","hydrex_treasury_or_team"):  # codehash alone never proves team ownership
+            who="Hydrex managed-lock (unverified)"; et="managed_lock"; conf="low"
+        else: who=short(lbl); et=cet; conf="medium"
     if pl and pl["confidence"] in ("high","medium"):
         who=short(pl["label"]); et=pl["entity_type"]; conf=pl["confidence"]
-    # --- partner inference: set identity only for genuinely-unknown owners; else annotate with own votes ---
-    if partner:
-        pcore=partner.split('/')[0].lower()
-        if et=="unknown":
-            who=f"likely {partner}"; et="partner_project"; conf="high" if consistency>=0.8 else "medium"
-        elif et in ("partner_project","alm_vault","individual_whale") and pcore not in who.lower():
-            who=f"{who} → votes {partner}"
-    rows.append({**f,"likely_who":who,"entity_type":et,"confidence":conf,"behavior_10ep":beh,**vote_profile(w)})
+    # --- partner inference: a Loyal single-pool voter for a partner pool IS that project ---
+    if et in ("unknown","managed_lock") and loyal_partner:
+        who=f"likely {loyal_partner}"; et="partner_project"; conf="high" if prof["voting_style"]=="Loyal" else "medium"
+    elif partner and et in ("partner_project","alm_vault","individual_whale") and partner.split('/')[0].lower() not in who.lower():
+        who=f"{who} → votes {partner}"
+    # --- QA calibration: never assert "team" without signer evidence (admin not checkable here) ---
+    if et=="hydrex_treasury_or_team" and not (f.get("treasury_signer_match") or w.lower() in TREAS):
+        who="Hydrex managed-lock (unverified)"; et="managed_lock"; conf="low"
+    # --- fix entity contradiction: a PartnerEscrow contract is not an "individual" ---
+    if "partnerescrow" in who.lower() and et=="individual_whale": et="partner_project"
+    # --- thin data: <3 voted epochs can't be called a mercenary spray; soften ---
+    if prof["voting_style"]=="Fee Focus" and prof["epochs_voted"]<3:
+        prof["voting_style"]="Occasional"
+    rows.append({**f,"likely_who":who,"entity_type":et,"confidence":conf,"behavior_10ep":beh,**prof})
 
 rows.sort(key=lambda r:r["rank"])
 with open("vehydx_top100_labeled.csv","w",newline="") as fp:
