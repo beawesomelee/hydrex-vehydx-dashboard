@@ -1,0 +1,8 @@
+# Unencrypted data & dashboard — keep private, NEVER publish.
+# Only the encrypted vehydx_dashboard.html + scripts are committed.
+vehydx_dashboard_plain.html
+*.json
+*.csv
+*.log
+__pycache__/
+.DS_Store
