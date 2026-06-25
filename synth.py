@@ -39,6 +39,30 @@ def behavior(w):
     if first>31: s+=f"; since ep{first}"
     return s, mode, consistency
 
+def vote_profile(w):
+    """Classify voting behavior over the last 10 epochs.
+    Loyal     = top vote hits the SAME pool in >=80% of voted epochs (clear allegiance)
+    Focused   = one main pool (dom 50-80%) OR <=3 distinct top pools
+    Fee Focus = spreads across 4+ pools with no dominant one (mercenary, chasing fees+bribes)
+    Idle      = never voted"""
+    h=H.get(w,{})
+    eps=sorted(int(k) for k in h.keys()); total=len(eps)
+    active=[e for e in eps if h[str(e)].get("voted")]
+    tops=[h[str(e)]["top"][0][0] for e in active if h[str(e)].get("top")]
+    ns=[h[str(e)].get("n",1) for e in active]
+    if not tops:
+        return {"epochs_voted":len(active),"epochs_total":total,"voting_style":"Idle",
+                "dom_pool":None,"dom_share":0.0,"distinct_pools":0,"avg_pools_per_epoch":0.0}
+    dom_pool,dom=Counter(tops).most_common(1)[0]
+    dom_share=dom/len(tops); distinct=len(set(tops)); avg_n=sum(ns)/len(ns)
+    # style needs BOTH within-epoch concentration (avg pools/epoch) AND cross-epoch consistency
+    if avg_n<=3 and dom_share>=0.7: style="Loyal"          # ~one pool, same one each epoch
+    elif avg_n<=6 and (dom_share>=0.5 or distinct<=3): style="Focused"  # a few pools, clear lean
+    else: style="Fee Focus"                                 # sprays 4+/epoch or rotates -> mercenary
+    return {"epochs_voted":len(active),"epochs_total":total,"voting_style":style,
+            "dom_pool":dom_pool,"dom_share":round(dom_share,2),"distinct_pools":distinct,
+            "avg_pools_per_epoch":round(avg_n,1)}
+
 def short(lbl):
     # condense verbose prior labels into a tag
     l=lbl.lower()
@@ -74,18 +98,18 @@ for f in F:
             who=f"likely {partner}"; et="partner_project"; conf="high" if consistency>=0.8 else "medium"
         elif et in ("partner_project","alm_vault","individual_whale") and pcore not in who.lower():
             who=f"{who} → votes {partner}"
-    rows.append({**f,"likely_who":who,"entity_type":et,"confidence":conf,"behavior_10ep":beh})
+    rows.append({**f,"likely_who":who,"entity_type":et,"confidence":conf,"behavior_10ep":beh,**vote_profile(w)})
 
 rows.sort(key=lambda r:r["rank"])
 with open("vehydx_top100_labeled.csv","w",newline="") as fp:
-    wr=csv.writer(fp); wr.writerow(["rank","wallet","vehydx","pct","type","entity_type","confidence","likely_who","behavior_last_10_epochs","current_top_votes"])
+    wr=csv.writer(fp); wr.writerow(["rank","wallet","vehydx","pct","type","entity_type","confidence","likely_who","voting_style","epochs_voted","dom_pool","dom_share","distinct_pools","avg_pools_per_epoch","behavior_last_10_epochs","current_top_votes"])
     for r in rows:
         ct=", ".join(f"{p} {pc}%" for p,pc in r["cur_targets"])
-        wr.writerow([r["rank"],r["wallet"],f"{r['vehydx']:.0f}",r["pct"],r["type"],r["entity_type"],r["confidence"],r["likely_who"],r["behavior_10ep"],ct])
+        wr.writerow([r["rank"],r["wallet"],f"{r['vehydx']:.0f}",r["pct"],r["type"],r["entity_type"],r["confidence"],r["likely_who"],r["voting_style"],f"{r['epochs_voted']}/{r['epochs_total']}",r["dom_pool"] or "",r["dom_share"],r["distinct_pools"],r["avg_pools_per_epoch"],r["behavior_10ep"],ct])
 json.dump(rows,open("vehydx_top100_labeled.json","w"),indent=1)
-print(f"{'#':>3} {'veHYDX':>6}{'%':>5} {'conf':<4} {'likely who':<34} behavior(10ep)")
+print(f"{'#':>3} {'veHYDX':>6} {'style':<10} {'ep':>5} {'dom%':>5} {'likely who':<30} dom pool")
 for r in rows:
-    print(f"{r['rank']:>3} {r['vehydx']/1e6:>4.2f}M{r['pct']:>5.2f} {r['confidence']:<4} {r['likely_who'][:33]:<34} {r['behavior_10ep'][:40]}")
+    print(f"{r['rank']:>3} {r['vehydx']/1e6:>4.2f}M {r['voting_style']:<10} {str(r['epochs_voted'])+'/'+str(r['epochs_total']):>5} {int(r['dom_share']*100):>4}% {r['likely_who'][:29]:<30} {r['dom_pool'] or '—'}")
 print("\nentity tally:",dict(Counter(r["entity_type"] for r in rows)))
-print("active-vote tally:", sum(1 for r in rows if "idle (never" not in r["behavior_10ep"]),"/100 voted in last 10ep")
+print("VOTING STYLE tally:",dict(Counter(r["voting_style"] for r in rows)))
 print("wrote vehydx_top100_labeled.csv")
