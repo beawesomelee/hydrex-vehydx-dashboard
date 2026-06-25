@@ -118,11 +118,23 @@ for f in F:
     rows.append({**f,"likely_who":who,"entity_type":et,"confidence":conf,"behavior_10ep":beh,**prof})
 
 rows.sort(key=lambda r:r["rank"])
+# attach historical holdings series + epoch-over-epoch delta (Dune-style)
+try:
+    HOLD=json.load(open("top100_holdings.json"))
+    for r in rows:
+        h=HOLD.get(r["wallet"],{}); eps=sorted(int(k) for k in h.keys())
+        r["holdings"]={str(e):h[str(e)] for e in eps}
+        if len(eps)>=2:
+            cur,prev=h[str(eps[-1])],h[str(eps[-2])]
+            r["delta_last"]=round(cur-prev,2); r["delta_pct"]=round((cur-prev)/prev*100,3) if prev>0 else None
+        else: r["delta_last"]=None; r["delta_pct"]=None
+except FileNotFoundError:
+    for r in rows: r["holdings"]={}; r["delta_last"]=None; r["delta_pct"]=None
 with open("vehydx_top100_labeled.csv","w",newline="") as fp:
-    wr=csv.writer(fp); wr.writerow(["rank","wallet","vehydx","pct","type","entity_type","confidence","likely_who","voting_style","epochs_voted","dom_pool","dom_share","distinct_pools","avg_pools_per_epoch","behavior_last_10_epochs","current_top_votes"])
+    wr=csv.writer(fp); wr.writerow(["rank","wallet","vehydx","pct","delta_last_epoch","type","entity_type","confidence","likely_who","voting_style","epochs_voted","dom_pool","dom_share","distinct_pools","avg_pools_per_epoch","behavior_last_10_epochs","current_top_votes"])
     for r in rows:
         ct=", ".join(f"{p} {pc}%" for p,pc in r["cur_targets"])
-        wr.writerow([r["rank"],r["wallet"],f"{r['vehydx']:.0f}",r["pct"],r["type"],r["entity_type"],r["confidence"],r["likely_who"],r["voting_style"],f"{r['epochs_voted']}/{r['epochs_total']}",r["dom_pool"] or "",r["dom_share"],r["distinct_pools"],r["avg_pools_per_epoch"],r["behavior_10ep"],ct])
+        wr.writerow([r["rank"],r["wallet"],f"{r['vehydx']:.0f}",r["pct"],r.get("delta_last") if r.get("delta_last") is not None else "",r["type"],r["entity_type"],r["confidence"],r["likely_who"],r["voting_style"],f"{r['epochs_voted']}/{r['epochs_total']}",r["dom_pool"] or "",r["dom_share"],r["distinct_pools"],r["avg_pools_per_epoch"],r["behavior_10ep"],ct])
 json.dump(rows,open("vehydx_top100_labeled.json","w"),indent=1)
 print(f"{'#':>3} {'veHYDX':>6} {'style':<10} {'ep':>5} {'dom%':>5} {'likely who':<30} dom pool")
 for r in rows:

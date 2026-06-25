@@ -110,6 +110,20 @@ leak=[f for f in tracked if f.endswith((".csv",)) or f=="vehydx_dashboard_plain.
       or (f.endswith(".json") and f!="package.json")]
 check("no plaintext data/dashboard committed (gitignore working)", not leak, f"LEAKED: {leak}")
 
+print("\n== F. holdings history (Δ + area chart) ==")
+if R and any(r.get("holdings") for r in R):
+    with_h=[r for r in R if r.get("holdings")]
+    eps=sorted({int(e) for r in with_h for e in r["holdings"]})
+    nz=[sum(1 for r in with_h if r["holdings"].get(str(e),0)>0) for e in eps]
+    check("holdings: latest epoch nearly all nonzero (>=90/100)", max(nz)>=90, f"max nonzero {max(nz)}")
+    check("holdings: no silent-failure zero wall (every epoch >=40 nonzero)", min(nz)>=40, f"min nonzero {min(nz)}")
+    agg=sum(r["holdings"].get(str(eps[-1]),0) for r in with_h); aggv=sum(r["vehydx"] for r in with_h)
+    check("holdings: latest-epoch aggregate ~ ranking total (within 6%)", abs(agg-aggv)/aggv<0.06, f"{agg/1e6:.0f}M vs {aggv/1e6:.0f}M", warn=True)
+    bad_delta=[r["rank"] for r in with_h if r.get("delta_last") is not None and abs(r["delta_last"])>r["vehydx"]]
+    check("holdings: Δ never exceeds the holding itself", not bad_delta, f"ranks {bad_delta[:5]}")
+else:
+    check("holdings history present (optional feature)", True, warn=True)
+
 print(f"\n{'='*56}\nQA: {PASSES} passed, {len(WARNS)} warned, {len(FAILS)} FAILED")
 if FAILS:
     print("BLOCKED — do not publish:"); [print("  -",f) for f in FAILS]; sys.exit(1)

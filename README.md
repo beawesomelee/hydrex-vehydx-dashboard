@@ -21,7 +21,8 @@ The passphrase is used only locally to encrypt; it is never stored (only ciphert
 ```
 python3 build_facts.py        # top-100 wallets, current votes, contract/Safe facts (~5 min)
 python3 build_history.py      # last-10-epoch vote history via archive RPC (~15 min)
-python3 synth.py              # label + voting-style classification -> vehydx_top100_labeled.csv
+python3 build_holdings_history.py  # last-10-epoch holdings: Δ column + area chart (~15 min)
+python3 synth.py              # label + voting-style classification + Δ -> vehydx_top100_labeled.csv
 python3 build_dashboard.py    # render dashboard
 python3 encrypt_dashboard.py "your-passphrase"   # re-seal
 python3 qa.py                 # QA GATE — must pass (exit 0) before publishing
