@@ -30,7 +30,7 @@ python3 qa.py                 # QA GATE — must pass (exit 0) before publishing
 
 ## QA (run before every publish)
 - **`qa.py`** — deterministic gate. 19 checks for data integrity, history sanity
-  (catches silent-RPC-failure "idle walls"), classification correctness (Loyal really
+  (catches silent-RPC-failure "idle walls"), classification correctness (Anchored really
   is concentrated; no style drift), label-vs-vote consistency (catches mislabels), and
   dashboard/security integrity (ciphertext present, passphrase absent, no plaintext data
   committed). Exits non-zero and blocks publish on any failure. Each check encodes a real

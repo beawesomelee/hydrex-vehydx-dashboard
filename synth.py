@@ -46,7 +46,7 @@ def behavior(w):
 
 def vote_profile(w):
     """Classify voting behavior over the last 10 epochs.
-    Loyal     = top vote hits the SAME pool in >=80% of voted epochs (clear allegiance)
+    Anchored     = top vote hits the SAME pool in >=80% of voted epochs (clear allegiance)
     Focused   = one main pool (dom 50-80%) OR <=3 distinct top pools
     Fee Focus = spreads across 4+ pools with no dominant one (mercenary, chasing fees+bribes)
     Idle      = never voted"""
@@ -61,7 +61,7 @@ def vote_profile(w):
     dom_pool,dom=Counter(tops).most_common(1)[0]
     dom_share=dom/len(tops); distinct=len(set(tops)); avg_n=sum(ns)/len(ns)
     # style needs BOTH within-epoch concentration (avg pools/epoch) AND cross-epoch consistency
-    if avg_n<=3 and dom_share>=0.7: style="Loyal"          # ~one pool, same one each epoch
+    if avg_n<=3 and dom_share>=0.7: style="Anchored"          # ~one pool, same one each epoch
     elif avg_n<=6 and (dom_share>=0.5 or distinct<=3): style="Focused"  # a few pools, clear lean
     else: style="Fee Focus"                                 # sprays 4+/epoch or rotates -> mercenary
     return {"epochs_voted":len(active),"epochs_total":total,"voting_style":style,
@@ -89,7 +89,7 @@ for f in F:
     w=f["wallet"]; pl=prior.get(w.lower()); prof=vote_profile(w)
     beh, mode, consistency = behavior(w)
     partner = partner_of(mode) if (mode and consistency>=0.6) else None
-    loyal_partner = partner_of(mode) if (mode and prof["voting_style"] in ("Loyal","Focused")) else None
+    loyal_partner = partner_of(mode) if (mode and prof["voting_style"] in ("Anchored","Focused")) else None
     # --- owner identity (priority) ---
     who="unknown"; et="unknown"; conf="low"
     if f.get("treasury_signer_match") or w.lower() in TREAS:
@@ -102,9 +102,9 @@ for f in F:
         else: who=short(lbl); et=cet; conf="medium"
     if pl and pl["confidence"] in ("high","medium"):
         who=short(pl["label"]); et=pl["entity_type"]; conf=pl["confidence"]
-    # --- partner inference: a Loyal single-pool voter for a partner pool IS that project ---
+    # --- partner inference: a Anchored single-pool voter for a partner pool IS that project ---
     if et in ("unknown","managed_lock") and loyal_partner:
-        who=f"likely {loyal_partner}"; et="partner_project"; conf="high" if prof["voting_style"]=="Loyal" else "medium"
+        who=f"likely {loyal_partner}"; et="partner_project"; conf="high" if prof["voting_style"]=="Anchored" else "medium"
     elif partner and et in ("partner_project","alm_vault","individual_whale") and partner.split('/')[0].lower() not in who.lower():
         who=f"{who} → votes {partner}"
     # --- QA calibration: never assert "team" without signer evidence (admin not checkable here) ---

@@ -44,7 +44,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700}
 .b-high{background:rgba(63,185,80,.16);color:var(--green)}.b-medium{background:rgba(210,153,34,.16);color:var(--orange)}.b-low{background:rgba(139,148,158,.16);color:var(--muted)}
 .vs{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700}
-.vs-Loyal{background:rgba(63,185,80,.18);color:var(--green)}
+.vs-Anchored{background:rgba(63,185,80,.18);color:var(--green)}
 .vs-Focused{background:rgba(57,212,207,.16);color:var(--cyan)}
 .vs-FeeFocus{background:rgba(210,153,34,.16);color:var(--orange)}
 .vs-Idle{background:rgba(139,148,158,.14);color:var(--muted)}
@@ -88,10 +88,10 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="row2">
   <div class="panel"><h3>veHYDX by holder type</h3><div class="hint">top 100; #1 treasury Safe (61.65%) shown separately</div><canvas id="chart" height="155"></canvas></div>
-  <div class="panel"><h3>Loyal / aligned backers</h3><div class="hint">vote the same pool ~every epoch &mdash; the ones to court</div><div id="backers"></div></div>
+  <div class="panel"><h3>Anchored / aligned backers</h3><div class="hint">vote the same pool ~every epoch &mdash; the ones to court</div><div id="backers"></div></div>
 </div>
 <div class="foot">
-<b>Voting style</b> (last 10 epochs): <span class="vs vs-Loyal">Loyal</span> same pool &ge;80% of voted epochs &middot; <span class="vs vs-Focused">Focused</span> one main pool or &le;3 pools &middot; <span class="vs vs-FeeFocus">Fee Focus</span> spreads across 4+ pools, no allegiance (chasing fees+bribes) &middot; <span class="vs vs-Idle">Idle</span> hasn&rsquo;t voted. The pool shown is their dominant target; %=share of voted epochs on it.<br>
+<b>Voting style</b> (last 10 epochs): <span class="vs vs-Anchored">Anchored</span> same pool &ge;80% of voted epochs &middot; <span class="vs vs-Focused">Focused</span> one main pool or &le;3 pools &middot; <span class="vs vs-FeeFocus">Fee Focus</span> spreads across 4+ pools, no allegiance (chasing fees+bribes) &middot; <span class="vs vs-Idle">Idle</span> hasn&rsquo;t voted. The pool shown is their dominant target; %=share of voted epochs on it.<br>
 <b>Confidence:</b> <span class="badge b-high">high</span> signer-matched Safe / verified contract / exclusive vote &middot; <span class="badge b-medium">medium</span> codehash-cluster (template, admin not re-verified) &middot; <span class="badge b-low">low</span> owner unresolved. 49/100 owners unresolved; &ldquo;Hydrex team/treasury&rdquo; via codehash is medium. Internal BD intel, do not distribute.
 </div>
 <script>
@@ -106,16 +106,16 @@ document.getElementById('cards').innerHTML=[
  ['Hydrex (verified)',D.hydrex_ctrl+'%','treasury + signer team · +'+D.managed_pct+'% managed-locks'],
  ['#1 Treasury Safe',D.treasury_pct+'%','votes a void sink gauge'],
  ['Contestable',(100-D.hydrex_ctrl-D.managed_pct).toFixed(1)+'%','non-Hydrex holders'],
- ['Loyal / Focused',(D.styles.Loyal||0)+(D.styles.Focused||0)+' of 100','aligned voters (vs '+(D.styles['Fee Focus']||0)+' mercenary)'],
+ ['Anchored / Focused',(D.styles.Anchored||0)+(D.styles.Focused||0)+' of 100','aligned voters (vs '+(D.styles['Fee Focus']||0)+' mercenary)'],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
  datasets:[{data:TYPE.map(t=>t[1]),backgroundColor:['#bc8cff','#3fb950','#58a6ff','#ff7b72','#8b949e','#d29922'],borderColor:'#161b22',borderWidth:2}]},
  options:{plugins:{legend:{position:'right',labels:{color:'#8b949e',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>c.label+': '+c.parsed+'M veHYDX'}}}}});
-const bk=ROWS.filter(r=>r.voting_style==='Loyal'&&r.entity_type!=='hydrex_treasury_or_team').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
+const bk=ROWS.filter(r=>r.voting_style==='Anchored'&&r.entity_type!=='hydrex_treasury_or_team').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.likely_who}</b> <span class="m">${VE(r.vehydx)}</span> &mdash; ${r.dom_pool} ${r.epochs_voted}/${r.epochs_total}ep</div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`likely identity, how they vote across 10 epochs, and confidence &middot; <b style="color:var(--green)">${D.styles.Loyal||0} Loyal</b> &middot; <b style="color:var(--cyan)">${D.styles.Focused||0} Focused</b> &middot; <b style="color:var(--orange)">${D.styles['Fee Focus']||0} Fee Focus</b> &middot; <b style="color:var(--muted)">${D.styles.Idle||0} Idle</b>`;
+document.getElementById('styleline').innerHTML=`likely identity, how they vote across 10 epochs, and confidence &middot; <b style="color:var(--green)">${D.styles.Anchored||0} Anchored</b> &middot; <b style="color:var(--cyan)">${D.styles.Focused||0} Focused</b> &middot; <b style="color:var(--orange)">${D.styles['Fee Focus']||0} Fee Focus</b> &middot; <b style="color:var(--muted)">${D.styles.Idle||0} Idle</b>`;
 let styleFilter='All';
-const chips=['All','Loyal','Focused','Fee Focus','Occasional','Idle'];
+const chips=['All','Anchored','Focused','Fee Focus','Occasional','Idle'];
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(c=>`<span class="chip ${c===styleFilter?'on':''}" onclick="setStyle('${c}')">${c}</span>`).join('');}
 function setStyle(s){styleFilter=s;renderChips();render();}
 let sk='rank',sd=1;

@@ -58,20 +58,20 @@ if H:
     tot_failed=sum(per_epoch[e][2] for e in eps)
     check("history pool-reads did not fail (failed_pools ~0)", tot_failed==0, f"{tot_failed} failed reads", warn=tot_failed>0 and tot_failed<200)
 
-print("\n== C. classification sanity (regression: avg_n Loyal bug + style drift) ==")
+print("\n== C. classification sanity (regression: avg_n Anchored bug + style drift) ==")
 if R:
     sc=Counter(r["voting_style"] for r in R)
     check("voting styles cover all 100", sum(sc.values())==100, dict(sc))
     check("Idle <=> epochs_voted==0",
           all((r["voting_style"]=="Idle")==(r["epochs_voted"]==0) for r in R))
-    bad_loyal=[r["rank"] for r in R if r["voting_style"]=="Loyal" and (r["avg_pools_per_epoch"]>3 or r["dom_share"]<0.7)]
-    check("every Loyal really is concentrated (<=3 pools/ep & dom>=70%)", not bad_loyal,
-          f"ranks violating: {bad_loyal} (the 9.7-pools 'Loyal' bug)")
+    bad_loyal=[r["rank"] for r in R if r["voting_style"]=="Anchored" and (r["avg_pools_per_epoch"]>3 or r["dom_share"]<0.7)]
+    check("every Anchored really is concentrated (<=3 pools/ep & dom>=70%)", not bad_loyal,
+          f"ranks violating: {bad_loyal} (the 9.7-pools 'Anchored' bug)")
     # re-derive style from stored metrics and assert it matches (catches synth/output drift)
     def restyle(r):
         if r["epochs_voted"]==0 or not r["dom_pool"]: return "Idle"
         n=r["avg_pools_per_epoch"]; ds=r["dom_share"]; dp=r["distinct_pools"]
-        if n<=3 and ds>=0.7: s="Loyal"
+        if n<=3 and ds>=0.7: s="Anchored"
         elif n<=6 and (ds>=0.5 or dp<=3): s="Focused"
         else: s="Fee Focus"
         if s=="Fee Focus" and r["epochs_voted"]<3: s="Occasional"  # too few votes to call mercenary
