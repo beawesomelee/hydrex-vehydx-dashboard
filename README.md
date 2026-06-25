@@ -21,11 +21,23 @@ The passphrase is used only locally to encrypt; it is never stored (only ciphert
 ```
 python3 build_facts.py        # top-100 wallets, current votes, contract/Safe facts (~5 min)
 python3 build_history.py      # last-10-epoch vote history via archive RPC (~15 min)
-python3 synth.py              # label + 10-epoch behavior -> vehydx_top100_labeled.csv
+python3 synth.py              # label + voting-style classification -> vehydx_top100_labeled.csv
 python3 build_dashboard.py    # render dashboard
 python3 encrypt_dashboard.py "your-passphrase"   # re-seal
+python3 qa.py                 # QA GATE — must pass (exit 0) before publishing
 ```
 (Full holder scan, if rebuilding from scratch: `python3 runner.py`.)
+
+## QA (run before every publish)
+- **`qa.py`** — deterministic gate. 19 checks for data integrity, history sanity
+  (catches silent-RPC-failure "idle walls"), classification correctness (Loyal really
+  is concentrated; no style drift), label-vs-vote consistency (catches mislabels), and
+  dashboard/security integrity (ciphertext present, passphrase absent, no plaintext data
+  committed). Exits non-zero and blocks publish on any failure. Each check encodes a real
+  bug we hit, so a weekly auto-refresh can't silently re-ship one.
+- **QA agent** (optional, deeper) — adversarial LLM review of the labels/classifications
+  for judgment-call errors (mislabels, mis-calibrated confidence, crackable unknowns).
+  Run via the `vehydx-qa-agent` workflow over `vehydx_top100_labeled.json`.
 
 ## Data sources (on-chain, Base)
 - veHYDX VotingEscrow `0x25b2ed7149fb8a05f6ef9407d9c8f878f59cd1e1` — `getVotes(addr)`, `balanceOfNFT(id)`
