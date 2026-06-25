@@ -67,10 +67,6 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 <h1>Hydrex veHYDX &mdash; Holder Intelligence \U0001F3DB</h1>
 <div class="sub">Who controls Hydrex emissions, how they vote across epochs, and who they likely are. Snapshot 2026-06-25 (epoch 40) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
 <div class="cards" id="cards"></div>
-<div class="row2">
-  <div class="panel"><h3>veHYDX by holder type</h3><div class="hint">top 100; #1 treasury Safe (61.65%) shown separately</div><canvas id="chart" height="155"></canvas></div>
-  <div class="panel"><h3>Loyal / aligned backers</h3><div class="hint">vote the same pool ~every epoch &mdash; the ones to court</div><div id="backers"></div></div>
-</div>
 <div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
     <h3 style="margin:0">Protocol Holders</h3>
@@ -88,6 +84,11 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
     <th onclick="sort('confidence')">Conf</th>
     <th>Addr</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
+  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder &mdash; the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M veHYDX = 61.65%</b> &mdash; is held out of the leaderboard: it votes a void/sink gauge (SpecialGaugeToken1/2), so it does not compete for partner emissions.</div>
+</div>
+<div class="row2">
+  <div class="panel"><h3>veHYDX by holder type</h3><div class="hint">top 100; #1 treasury Safe (61.65%) shown separately</div><canvas id="chart" height="155"></canvas></div>
+  <div class="panel"><h3>Loyal / aligned backers</h3><div class="hint">vote the same pool ~every epoch &mdash; the ones to court</div><div id="backers"></div></div>
 </div>
 <div class="foot">
 <b>Voting style</b> (last 10 epochs): <span class="vs vs-Loyal">Loyal</span> same pool &ge;80% of voted epochs &middot; <span class="vs vs-Focused">Focused</span> one main pool or &le;3 pools &middot; <span class="vs vs-FeeFocus">Fee Focus</span> spreads across 4+ pools, no allegiance (chasing fees+bribes) &middot; <span class="vs vs-Idle">Idle</span> hasn&rsquo;t voted. The pool shown is their dominant target; %=share of voted epochs on it.<br>
