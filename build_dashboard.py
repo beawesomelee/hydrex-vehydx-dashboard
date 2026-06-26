@@ -111,7 +111,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
     <th onclick="sort('voting_style')">Votes for</th>
     <th onclick="sort('vote_mode')">How they vote</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
-  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder &mdash; the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M veHYDX = 61.65%</b> &mdash; is excluded because it <b>does not vote on any active pool</b>: it parks its votes in a void/sink gauge (SpecialGaugeToken1/2), so it never competes for partner emissions. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
+  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder, the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M</b> is excluded because it <b>does not vote on any active pool</b>. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">each line = one holder's veHYDX balance (not votes) &middot; top 12 + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2" id="trends">
