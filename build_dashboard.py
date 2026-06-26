@@ -79,7 +79,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 .pill b{color:var(--text)}.pill .m{color:var(--muted)}
 @media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.row2{grid-template-columns:1fr}}
 </style></head><body>
-<h1>Hydrex veHYDX &mdash; Holder Intelligence \U0001F3DB</h1>
+<h1>Hydrex veHYDX &mdash; Holder Intelligence</h1>
 <div class="sub">What each top veHYDX holder votes for, and how they vote (set-and-forget vs automated vs active). Snapshot 2026-06-25 (epoch 40) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
 <div class="cards" id="cards"></div>
 <div class="panel">
@@ -106,9 +106,9 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
   <div class="panel"><h3>One-pool backers</h3><div class="hint">pools with committed single-pool veHYDX behind them</div><div id="backers"></div></div>
 </div>
 <div class="foot">
-<b>Votes for</b> (last 10 epochs): <span class="brd">🎯 one pool</span> = same single pool ≥80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">💸 fee-max</span> = spreads across 4+ pools, no allegiance (chasing fees+bribes).<br>
-<b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">📌 Set-and-forget</span> voted once, the vote just persists (passive) &middot; <span class="md md-Automated">🤖 Automated</span> re-votes every epoch at a fixed time-of-day (bot/keeper) &middot; <span class="md md-Active">✋ Active</span> re-votes every epoch at varied times (manual human) &middot; <span class="md md-Nevervoted">⚪ Never</span> holds veHYDX but never voted.<br>
-<b>Key pattern:</b> single-pool holders are mostly set-and-forget (committed, passive); fee-maximizers are mostly automated/active (re-vote weekly to chase bribes). Internal BD intel, do not distribute.
+<b>Votes for</b> (last 10 epochs): <span class="brd">one pool</span> = same single pool &ge;80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">fee-max</span> = spreads across 4+ pools, no allegiance.<br>
+<b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote persists (passive) &middot; <span class="md md-Automated">Automated</span> re-votes every epoch at a regular time (bot/keeper) &middot; <span class="md md-Active">Active</span> re-votes every epoch at varied times (manual) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
+<b>Pattern:</b> single-pool holders are predominantly set-and-forget; fee-maximizers are predominantly automated or active (re-voting weekly). Internal BD intel &mdash; do not distribute.
 </div>
 <script>
 const ROWS=__ROWS__, TYPE=__TYPE__, D=__DATA__, AREA=__AREA__;
@@ -120,15 +120,13 @@ const tnShort={hydrex_treasury_or_team:'team',managed_lock:'mgd-lock?',partner_p
 const vsClass=s=>'vs-'+s.replace(' ','');
 const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 // breadth (what they vote for) display from voting_style
-const brd={Anchored:['🎯','one pool'],Focused:['','1-3 pools'],'Fee Focus':['💸','fee-max'],Occasional:['','occasional'],Idle:['','—']};
-// mode (how they vote) display
-const modeIcon={Automated:'🤖','Active':'✋','Set-and-forget':'📌','Never voted':'⚪'};
+const brd={Anchored:'one pool',Focused:'1-3 pools','Fee Focus':'fee-max',Occasional:'occasional',Idle:'—'};
 document.getElementById('cards').innerHTML=[
  ['Total voting power',VE(D.total),D.holders.toLocaleString()+' holders'],
  ['Hydrex (verified)',D.hydrex_ctrl+'%','treasury + signer team · +'+D.managed_pct+'% managed-locks'],
  ['#1 Treasury Safe',D.treasury_pct+'%','votes a void sink gauge'],
  ['Contestable',(100-D.hydrex_ctrl-D.managed_pct).toFixed(1)+'%','non-Hydrex holders'],
- ['Vote modes',(D.modes.Automated||0)+'🤖 '+(D.modes.Active||0)+'✋ '+(D.modes['Set-and-forget']||0)+'📌','automated / active / set-&-forget (of top 100)'],
+ ['Vote modes',(D.modes.Automated||0)+' / '+(D.modes.Active||0)+' / '+(D.modes['Set-and-forget']||0),'automated / active / set-and-forget (of top 100)'],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
  datasets:[{data:TYPE.map(t=>t[1]),backgroundColor:['#bc8cff','#3fb950','#58a6ff','#ff7b72','#8b949e','#d29922'],borderColor:'#161b22',borderWidth:2}]},
@@ -142,10 +140,10 @@ if(D.has_holdings){
      scales:{x:{stacked:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}},y:{stacked:true,ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
-document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.vehydx)}</span> &mdash; ${modeIcon[r.vote_mode]||''} ${r.vote_mode.replace('Set-and-forget','set & forget').toLowerCase()}</div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> × <b>how they vote</b> &middot; <b style="color:var(--orange)">${D.modes.Automated||0} 🤖 automated</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} ✋ active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} 📌 set-&-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} ⚪ never</b>`;
+document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.vehydx)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
+document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--orange)">${D.modes.Automated||0} automated</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} set-and-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} never</b>`;
 let modeFilter='All';
-const chips=[['All','All'],['🤖 Automated','Automated'],['✋ Active','Active'],['📌 Set-and-forget','Set-and-forget'],['⚪ Never voted','Never voted']];
+const chips=[['All','All'],['Automated','Automated'],['Active','Active'],['Set-and-forget','Set-and-forget'],['Never voted','Never voted']];
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl}</span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
@@ -155,20 +153,19 @@ function render(){
  let rows=ROWS.filter(r=>(modeFilter==='All'||r.vote_mode===modeFilter) && (!q||((r.dom_pool||'')+' '+r.vote_mode+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
-  const b=brd[r.voting_style]||['','—'];
-  const votesFor = r.dom_pool
-    ? `<span class="brd">${b[0]} ${b[1]}</span><div class="sub2"><span class="tvpool">${r.dom_pool}</span>${r.voting_style==='Fee Focus'?' · spreads '+r.avg_pools_per_epoch+' pools/ep':''}</div>`
-    : `<span class="brd" style="color:var(--muted)">— never votes</span>`;
+  const votesFor = !r.dom_pool ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
+    : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
+    : `<span class="brd">${brd[r.voting_style]||'—'}</span><div class="sub2">${r.dom_pool}</div>`;
   const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>`
-    : r.vote_mode==='Automated' ? `<div class="sub2">weekly, fixed time (R=${r.tod_R})</div>`
-    : r.vote_mode==='Active' ? `<div class="sub2">${r.n_revotes}× re-votes, varied times</div>` : '';
+    : r.vote_mode==='Automated' ? `<div class="sub2">weekly, regular time</div>`
+    : r.vote_mode==='Active' ? `<div class="sub2">weekly, varied times</div>` : '';
   return `<tr>
   <td class="n" style="color:var(--muted)">${r.rank}</td>
-  <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)} ↗</a></td>
+  <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>
   <td class="n">${VE(r.vehydx)}</td><td class="n">${r.pct}%</td>
   <td class="n">${dlt(r.delta_last)}</td>
   <td>${votesFor}</td>
-  <td><span class="md ${mdClass(r.vote_mode)}">${modeIcon[r.vote_mode]||''} ${r.vote_mode}</span>${lvSub}</td>
+  <td><span class="md ${mdClass(r.vote_mode)}">${r.vote_mode}</span>${lvSub}</td>
  </tr>`;}).join('');
 }
 renderChips();render();
