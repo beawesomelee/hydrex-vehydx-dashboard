@@ -21,7 +21,7 @@ EPN=sorted({int(e) for r in R for e in r.get("holdings",{})})
 def hser(r): return [round(r.get("holdings",{}).get(str(e),0)/1e6,3) for e in EPN]
 hsorted=sorted(R,key=lambda r:r["vehydx"],reverse=True)
 TOPN=12; top=hsorted[:TOPN]; rest=hsorted[TOPN:]
-area=[{"label":f"#{r['rank']} {r.get('dom_pool') or r['wallet'][:8]}"[:28],"data":hser(r)} for r in top]
+area=[{"label":f"#{r['rank']} {r['wallet'][:6]}…{r['wallet'][-4:]}","data":hser(r)} for r in top]
 if rest: area.append({"label":"Other (top 100)","data":[round(sum(r.get('holdings',{}).get(str(e),0) for r in rest)/1e6,3) for e in EPN]})
 AREA=json.dumps({"epochs":[f"ep{e}" for e in EPN],"series":area})
 # Staker count + total veHYDX over the protocol's full history (Dune-style growth)
@@ -113,12 +113,12 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
   </tr></thead><tbody id="tb"></tbody></table></div>
   <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder &mdash; the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M veHYDX = 61.65%</b> &mdash; is excluded because it <b>does not vote on any active pool</b>: it parks its votes in a void/sink gauge (SpecialGaugeToken1/2), so it never competes for partner emissions. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
 </div>
-<div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">top 12 holders + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
+<div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">each line = one holder's veHYDX balance (not votes) &middot; top 12 + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2" id="trends">
   <div class="panel"><h3>Stakers over time</h3><div class="hint">veHYDX holders per epoch since launch (current cohort) &mdash; protocol growth</div><div style="position:relative;height:250px"><canvas id="stakerChart"></canvas></div></div>
   <div class="panel"><h3>Total veHYDX over time</h3><div class="hint">total voting power locked per epoch since launch</div><div style="position:relative;height:250px"><canvas id="totalChart"></canvas></div></div>
 </div>
-<div class="panel" style="margin-bottom:20px"><h3>One-pool backers</h3><div class="hint">pools with committed single-pool veHYDX behind them</div><div id="backers"></div></div>
+<div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
 <b>Votes for</b> (last 10 epochs): <span class="brd">one pool</span> = same single pool &ge;80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">fee-max</span> = spreads across 4+ pools, no allegiance.<br>
 <b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote just persists &middot; <span class="md md-Active">Active</span> actively re-votes (changes its vote) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
