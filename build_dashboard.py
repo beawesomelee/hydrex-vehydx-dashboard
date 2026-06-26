@@ -53,7 +53,7 @@ h1{margin:0 0 4px;font-size:22px}.sub{color:var(--muted);font-size:13px;margin-b
 table{width:100%;border-collapse:collapse;font-size:12.5px}
 th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);vertical-align:middle}
 th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.5px;cursor:pointer;user-select:none;position:sticky;top:0;background:var(--panel);z-index:1}
-th:hover{color:var(--text)}td.n{text-align:right;font-variant-numeric:tabular-nums}
+th:hover{color:var(--text)}.n{text-align:right;font-variant-numeric:tabular-nums}
 tr:hover td{background:rgba(255,255,255,.02)}
 a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .who{font-weight:600}.sub2{color:var(--muted);font-size:11px}
@@ -162,7 +162,7 @@ function render(){
     : `<span class="brd">${brd[r.voting_style]||'—'}</span><div class="sub2">${r.dom_pool}</div>`;
   const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>` : '';
   return `<tr>
-  <td class="n" style="color:var(--muted)">${r.rank}</td>
+  <td style="color:var(--muted)">${r.rank}</td>
   <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>
   <td class="n">${VE(r.vehydx)}</td><td class="n">${r.pct}%</td>
   <td class="n">${dlt(r.delta_last)}</td>
