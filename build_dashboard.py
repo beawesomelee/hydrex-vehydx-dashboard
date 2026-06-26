@@ -24,6 +24,13 @@ TOPN=12; top=hsorted[:TOPN]; rest=hsorted[TOPN:]
 area=[{"label":f"#{r['rank']} {r.get('dom_pool') or r['wallet'][:8]}"[:28],"data":hser(r)} for r in top]
 if rest: area.append({"label":"Other (top 100)","data":[round(sum(r.get('holdings',{}).get(str(e),0) for r in rest)/1e6,3) for e in EPN]})
 AREA=json.dumps({"epochs":[f"ep{e}" for e in EPN],"series":area})
+# Staker count + total veHYDX over the protocol's full history (Dune-style growth)
+try:
+    SH=json.load(open("staker_history.json"))
+    STAKER=json.dumps({"epochs":[f"ep{e}" for e in SH["epochs"]],"stakers":SH["stakers"],"total":SH["total_vehydx_m"]})
+    HAS_STAKER=bool(SH.get("epochs"))
+except FileNotFoundError:
+    STAKER=json.dumps({"epochs":[],"stakers":[],"total":[]}); HAS_STAKER=False
 # Current epoch derived from the data (max epoch present) so it auto-updates each refresh.
 import datetime as _dt
 EP39_START=1781136000; EPLEN=604800   # Hydrex epoch 39 start = 2026-06-11 00:00 UTC; 1 epoch = 1 week
@@ -33,7 +40,7 @@ EPOCH_RANGE=_dt.datetime.utcfromtimestamp(_s).strftime("%b %-d")+" – "+_dt.dat
 DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"managed_pct":round(managed_pct,1),
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
                  "epoch":CUR_EPOCH,"epoch_range":EPOCH_RANGE,
-                 "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN)})
+                 "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN),"has_staker":HAS_STAKER})
 
 html = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -107,17 +114,18 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
   <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder &mdash; the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M veHYDX = 61.65%</b> &mdash; is excluded because it <b>does not vote on any active pool</b>: it parks its votes in a void/sink gauge (SpecialGaugeToken1/2), so it never competes for partner emissions. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">top 12 holders + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
-<div class="row2">
-  <div class="panel"><h3>veHYDX by holder type</h3><div class="hint">top 100; #1 treasury Safe (61.65%) shown separately</div><canvas id="chart" height="155"></canvas></div>
-  <div class="panel"><h3>One-pool backers</h3><div class="hint">pools with committed single-pool veHYDX behind them</div><div id="backers"></div></div>
+<div class="row2" id="trends">
+  <div class="panel"><h3>Stakers over time</h3><div class="hint">veHYDX holders per epoch since launch (current cohort) &mdash; protocol growth</div><div style="position:relative;height:250px"><canvas id="stakerChart"></canvas></div></div>
+  <div class="panel"><h3>Total veHYDX over time</h3><div class="hint">total voting power locked per epoch since launch</div><div style="position:relative;height:250px"><canvas id="totalChart"></canvas></div></div>
 </div>
+<div class="panel" style="margin-bottom:20px"><h3>One-pool backers</h3><div class="hint">pools with committed single-pool veHYDX behind them</div><div id="backers"></div></div>
 <div class="foot">
 <b>Votes for</b> (last 10 epochs): <span class="brd">one pool</span> = same single pool &ge;80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">fee-max</span> = spreads across 4+ pools, no allegiance.<br>
 <b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote just persists &middot; <span class="md md-Active">Active</span> actively re-votes (changes its vote) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
 <b>Pattern:</b> single-pool holders are predominantly set-and-forget (committed, passive); fee-maximizers are predominantly active re-voters (chasing the best bribe). Internal BD intel &mdash; do not distribute.
 </div>
 <script>
-const ROWS=__ROWS__, TYPE=__TYPE__, D=__DATA__, AREA=__AREA__;
+const ROWS=__ROWS__, D=__DATA__, AREA=__AREA__, STAKER=__STAKER__;
 const VE=n=>(n>=1e6?(n/1e6).toFixed(2)+'M':(n/1e3).toFixed(0)+'K');
 const sc=a=>a.slice(0,6)+'…'+a.slice(-4);
 const dlt=v=>(v==null?'<span style="color:var(--muted)">—</span>':v>0?'<span style="color:var(--green)">+'+Math.round(v).toLocaleString()+'</span>':v<0?'<span style="color:var(--red)">'+Math.round(v).toLocaleString()+'</span>':'<span style="color:var(--muted)">0</span>');
@@ -132,9 +140,16 @@ document.getElementById('cards').innerHTML=[
  ['Accounts',D.holders.toLocaleString(),'veHYDX holders'],
  ['Current Epoch','Epoch '+D.epoch,D.epoch_range],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
-new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
- datasets:[{data:TYPE.map(t=>t[1]),backgroundColor:['#bc8cff','#3fb950','#58a6ff','#ff7b72','#8b949e','#d29922'],borderColor:'#161b22',borderWidth:2}]},
- options:{plugins:{legend:{position:'right',labels:{color:'#8b949e',font:{size:11},boxWidth:12}},tooltip:{callbacks:{label:c=>c.label+': '+c.parsed+'M veHYDX'}}}}});
+if(D.has_staker){
+ new Chart(document.getElementById('stakerChart'),{type:'line',data:{labels:STAKER.epochs,
+   datasets:[{label:'Stakers',data:STAKER.stakers,borderColor:'#58a6ff',backgroundColor:'#58a6ff22',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
+   options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toLocaleString()+' stakers'}}},
+     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12},grid:{color:'#30363d'}},y:{beginAtZero:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}}}}});
+ new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:STAKER.epochs,
+   datasets:[{label:'Total veHYDX',data:STAKER.total,borderColor:'#3fb950',backgroundColor:'#3fb95022',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
+   options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+'M veHYDX'}}},
+     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12},grid:{color:'#30363d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});
+}else{document.getElementById('trends').style.display='none';}
 if(D.has_holdings){
  const pal=['#bc8cff','#ff7b72','#58a6ff','#3fb950','#d29922','#39d4cf','#ff7b9d','#a5d6ff','#f85149','#ffa657','#7ce38b','#d2a8ff'];
  new Chart(document.getElementById('area'),{type:'line',data:{labels:AREA.epochs,
@@ -172,6 +187,6 @@ function render(){
 }
 renderChips();render();
 </script></body></html>"""
-html=html.replace("__ROWS__",ROWS).replace("__TYPE__",TYPE).replace("__DATA__",DATA).replace("__AREA__",AREA).replace("__EPOCH__",str(CUR_EPOCH)).replace("__EPRANGE__",EPOCH_RANGE)
+html=html.replace("__ROWS__",ROWS).replace("__DATA__",DATA).replace("__AREA__",AREA).replace("__STAKER__",STAKER).replace("__EPOCH__",str(CUR_EPOCH)).replace("__EPRANGE__",EPOCH_RANGE)
 open("vehydx_dashboard_plain.html","w").write(html)
 print(f"wrote vehydx_dashboard_plain.html ({len(html)} bytes) | styles: {dict(style_ct)}")
