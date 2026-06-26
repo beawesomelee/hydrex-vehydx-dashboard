@@ -113,8 +113,8 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="foot">
 <b>Votes for</b> (last 10 epochs): <span class="brd">one pool</span> = same single pool &ge;80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">fee-max</span> = spreads across 4+ pools, no allegiance.<br>
-<b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote persists (passive) &middot; <span class="md md-Automated">Automated</span> re-votes every epoch at a regular time (bot/keeper) &middot; <span class="md md-Active">Active</span> re-votes every epoch at varied times (manual) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
-<b>Pattern:</b> single-pool holders are predominantly set-and-forget; fee-maximizers are predominantly automated or active (re-voting weekly). Internal BD intel &mdash; do not distribute.
+<b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote just persists &middot; <span class="md md-Active">Active</span> actively re-votes (changes its vote) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
+<b>Pattern:</b> single-pool holders are predominantly set-and-forget (committed, passive); fee-maximizers are predominantly active re-voters (chasing the best bribe). Internal BD intel &mdash; do not distribute.
 </div>
 <script>
 const ROWS=__ROWS__, TYPE=__TYPE__, D=__DATA__, AREA=__AREA__;
@@ -145,9 +145,9 @@ if(D.has_holdings){
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.vehydx)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--orange)">${D.modes.Automated||0} automated</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} set-and-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} never</b>`;
+document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} set-and-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} never</b>`;
 let modeFilter='All';
-const chips=[['All','All'],['Automated','Automated'],['Active','Active'],['Set-and-forget','Set-and-forget'],['Never voted','Never voted']];
+const chips=[['All','All'],['Active','Active'],['Set-and-forget','Set-and-forget'],['Never voted','Never voted']];
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl}</span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
@@ -160,9 +160,7 @@ function render(){
   const votesFor = !r.dom_pool ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
     : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
     : `<span class="brd">${brd[r.voting_style]||'—'}</span><div class="sub2">${r.dom_pool}</div>`;
-  const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>`
-    : r.vote_mode==='Automated' ? `<div class="sub2">weekly, regular time</div>`
-    : r.vote_mode==='Active' ? `<div class="sub2">weekly, varied times</div>` : '';
+  const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>` : '';
   return `<tr>
   <td class="n" style="color:var(--muted)">${r.rank}</td>
   <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>

@@ -56,15 +56,13 @@ for blk in blocks:
     print(f"  sampled {blk}", flush=True)
 
 def classify(ts_list):
+    # voted once (lastVoted never changes) = Set-and-forget; re-votes (changes) = Active; none = Never.
+    # (Each epoch is weekly, so we don't characterise by frequency or vote time-of-day.)
     distinct=sorted(set(t for t in ts_list if t>0))
-    if not distinct: return {"mode":"Never voted","n_revotes":0,"last_vote":None,"tod_R":None,"revotes":[]}
+    if not distinct: return {"mode":"Never voted","n_revotes":0,"last_vote":None,"revotes":[]}
     n=len(distinct); last=distinct[-1]
-    if n==1: return {"mode":"Set-and-forget","n_revotes":1,"last_vote":last,"tod_R":None,"revotes":distinct}
-    # time-of-day concentration (circular): R near 1 = same time daily = automated
-    ang=[2*math.pi*(t%86400)/86400 for t in distinct]
-    R=math.hypot(sum(math.cos(a) for a in ang),sum(math.sin(a) for a in ang))/n
-    mode="Automated" if R>=0.85 else "Active"
-    return {"mode":mode,"n_revotes":n,"last_vote":last,"tod_R":round(R,3),"revotes":distinct}
+    mode="Set-and-forget" if n==1 else "Active"
+    return {"mode":mode,"n_revotes":n,"last_vote":last,"revotes":distinct}
 
 out={w:classify(series[w]) for w in wallets}
 json.dump(out, open("top100_revote.json","w"))

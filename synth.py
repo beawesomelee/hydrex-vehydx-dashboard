@@ -135,7 +135,8 @@ try:
     RV=json.load(open("top100_revote.json"))
     for r in rows:
         m=RV.get(r["wallet"],{})
-        r["vote_mode"]=m.get("mode","—"); r["tod_R"]=m.get("tod_R"); r["last_vote"]=m.get("last_vote"); r["n_revotes"]=m.get("n_revotes",0)
+        vm=m.get("mode","—"); r["vote_mode"]="Active" if vm=="Automated" else vm
+        r["last_vote"]=m.get("last_vote"); r["n_revotes"]=m.get("n_revotes",0)
 except FileNotFoundError:
     for r in rows: r["vote_mode"]="—"; r["tod_R"]=None; r["last_vote"]=None; r["n_revotes"]=0
 with open("vehydx_top100_labeled.csv","w",newline="") as fp:
