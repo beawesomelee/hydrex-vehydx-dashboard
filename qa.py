@@ -28,9 +28,12 @@ if facts:
     check("top100_facts has 100 wallets", len(facts.get("facts",[]))==100, f"got {len(facts.get('facts',[]))}")
 if R:
     check("labeled output has 100 rows", len(R)==100, f"got {len(R)}")
-    need=["likely_who","entity_type","confidence","voting_style","epochs_voted","dom_pool","dom_share","avg_pools_per_epoch"]
+    need=["likely_who","entity_type","confidence","voting_style","epochs_voted","dom_pool","dom_share","avg_pools_per_epoch","vote_mode"]
     miss=[r["rank"] for r in R if any(k not in r for k in need)]
     check("every row has all required fields", not miss, f"missing on ranks {miss[:5]}")
+    check("vote_mode values valid", all(r.get("vote_mode") in ("Automated","Active","Set-and-forget","Never voted","—") for r in R))
+    # sanity: a wallet that never voted should hold veHYDX but show Never/Set-forget, not Automated
+    check("'Automated' implies it actually re-voted (n_revotes>=2)", all(r.get("vote_mode")!="Automated" or r.get("n_revotes",0)>=2 for r in R))
     check("confidence values valid", all(r["confidence"] in ("high","medium","low") for r in R))
     check("entity_type values valid", all(r["entity_type"] in
           ("hydrex_treasury_or_team","partner_project","individual_whale","alm_vault","managed_lock","market_maker","unknown") for r in R))

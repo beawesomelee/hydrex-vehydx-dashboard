@@ -10,6 +10,7 @@ top100sum=sum(r["vehydx"] for r in R)
 by_type={}
 for r in R: by_type[r["entity_type"]]=by_type.get(r["entity_type"],0)+r["vehydx"]
 style_ct=Counter(r["voting_style"] for r in R)
+mode_ct=Counter(r.get("vote_mode","—") for r in R)
 for r in R:
     r["cur"]=", ".join(f"{x} {pc}%" for x,pc in r.get("cur_targets",[])) or "—"
 
@@ -20,12 +21,12 @@ EPN=sorted({int(e) for r in R for e in r.get("holdings",{})})
 def hser(r): return [round(r.get("holdings",{}).get(str(e),0)/1e6,3) for e in EPN]
 hsorted=sorted(R,key=lambda r:r["vehydx"],reverse=True)
 TOPN=12; top=hsorted[:TOPN]; rest=hsorted[TOPN:]
-area=[{"label":f"#{r['rank']} {r['likely_who']}"[:30],"data":hser(r)} for r in top]
+area=[{"label":f"#{r['rank']} {r.get('dom_pool') or r['wallet'][:8]}"[:28],"data":hser(r)} for r in top]
 if rest: area.append({"label":"Other (top 100)","data":[round(sum(r.get('holdings',{}).get(str(e),0) for r in rest)/1e6,3) for e in EPN]})
 AREA=json.dumps({"epochs":[f"ep{e}" for e in EPN],"series":area})
 DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"managed_pct":round(managed_pct,1),
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
-                 "styles":dict(style_ct),"has_holdings":bool(EPN)})
+                 "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN)})
 
 html = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -57,6 +58,12 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .vs-FeeFocus{background:rgba(210,153,34,.16);color:var(--orange)}
 .vs-Idle{background:rgba(139,148,158,.14);color:var(--muted)}
 .vs-Occasional{background:rgba(139,148,158,.14);color:var(--muted)}
+.md{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap}
+.md-Automated{background:rgba(210,153,34,.18);color:var(--orange)}
+.md-Active{background:rgba(57,212,207,.16);color:var(--cyan)}
+.md-Setandforget{background:rgba(63,185,80,.16);color:var(--green)}
+.md-Nevervoted{background:rgba(139,148,158,.14);color:var(--muted)}
+.brd{font-weight:700;font-size:12px}
 .et{font-size:9.5px;padding:1px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
 .et-hydrex_treasury_or_team{background:rgba(188,140,255,.15);color:var(--purple)}
 .et-managed_lock{background:rgba(188,140,255,.09);color:#b89bd6}
@@ -73,36 +80,35 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 @media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.row2{grid-template-columns:1fr}}
 </style></head><body>
 <h1>Hydrex veHYDX &mdash; Holder Intelligence \U0001F3DB</h1>
-<div class="sub">Who controls Hydrex emissions, how they vote across epochs, and who they likely are. Snapshot 2026-06-25 (epoch 40) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
+<div class="sub">What each top veHYDX holder votes for, and how they vote (set-and-forget vs automated vs active). Snapshot 2026-06-25 (epoch 40) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
 <div class="cards" id="cards"></div>
 <div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-    <h3 style="margin:0">Protocol Holders</h3>
-    <input id="q" placeholder="filter holder / pool / address…" oninput="render()"/>
+    <h3 style="margin:0">Voter Behavior</h3>
+    <input id="q" placeholder="filter pool / mode / address…" oninput="render()"/>
   </div>
   <div class="hint" id="styleline"></div>
   <div style="margin:6px 0 12px" id="chips"></div>
   <div class="tablewrap"><table id="t"><thead><tr>
     <th onclick="sort('rank')">#</th>
-    <th onclick="sort('likely_who')">Likely holder</th>
+    <th>Wallet</th>
     <th class="n" onclick="sort('vehydx')">veHYDX</th>
     <th class="n" onclick="sort('pct')">%</th>
     <th class="n" onclick="sort('delta_last')">&Delta; epoch</th>
-    <th class="n" onclick="sort('epochs_voted')">Epochs voted</th>
-    <th onclick="sort('voting_style')">Voting style &middot; pool</th>
-    <th onclick="sort('confidence')">Conf</th>
-    <th>Addr</th>
+    <th onclick="sort('voting_style')">Votes for</th>
+    <th onclick="sort('vote_mode')">How they vote</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
   <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder &mdash; the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M veHYDX = 61.65%</b> &mdash; is held out of the leaderboard: it votes a void/sink gauge (SpecialGaugeToken1/2), so it does not compete for partner emissions. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">top 12 holders + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2">
   <div class="panel"><h3>veHYDX by holder type</h3><div class="hint">top 100; #1 treasury Safe (61.65%) shown separately</div><canvas id="chart" height="155"></canvas></div>
-  <div class="panel"><h3>Anchored / aligned backers</h3><div class="hint">vote the same pool ~every epoch &mdash; the ones to court</div><div id="backers"></div></div>
+  <div class="panel"><h3>One-pool backers</h3><div class="hint">pools with committed single-pool veHYDX behind them</div><div id="backers"></div></div>
 </div>
 <div class="foot">
-<b>Voting style</b> (last 10 epochs): <span class="vs vs-Anchored">Anchored</span> same pool &ge;80% of voted epochs &middot; <span class="vs vs-Focused">Focused</span> one main pool or &le;3 pools &middot; <span class="vs vs-FeeFocus">Fee Focus</span> spreads across 4+ pools, no allegiance (chasing fees+bribes) &middot; <span class="vs vs-Idle">Idle</span> hasn&rsquo;t voted. The pool shown is their dominant target; %=share of voted epochs on it.<br>
-<b>Confidence:</b> <span class="badge b-high">high</span> signer-matched Safe / verified contract / exclusive vote &middot; <span class="badge b-medium">medium</span> codehash-cluster (template, admin not re-verified) &middot; <span class="badge b-low">low</span> owner unresolved. 49/100 owners unresolved; &ldquo;Hydrex team/treasury&rdquo; via codehash is medium. Internal BD intel, do not distribute.
+<b>Votes for</b> (last 10 epochs): <span class="brd">🎯 one pool</span> = same single pool ≥80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">💸 fee-max</span> = spreads across 4+ pools, no allegiance (chasing fees+bribes).<br>
+<b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">📌 Set-and-forget</span> voted once, the vote just persists (passive) &middot; <span class="md md-Automated">🤖 Automated</span> re-votes every epoch at a fixed time-of-day (bot/keeper) &middot; <span class="md md-Active">✋ Active</span> re-votes every epoch at varied times (manual human) &middot; <span class="md md-Nevervoted">⚪ Never</span> holds veHYDX but never voted.<br>
+<b>Key pattern:</b> single-pool holders are mostly set-and-forget (committed, passive); fee-maximizers are mostly automated/active (re-vote weekly to chase bribes). Internal BD intel, do not distribute.
 </div>
 <script>
 const ROWS=__ROWS__, TYPE=__TYPE__, D=__DATA__, AREA=__AREA__;
@@ -112,12 +118,17 @@ const dlt=v=>(v==null?'<span style="color:var(--muted)">—</span>':v>0?'<span s
 const tn={hydrex_treasury_or_team:'Hydrex team/treasury',managed_lock:'Hydrex managed-lock (unverified)',partner_project:'Partner projects',individual_whale:'Individual whales',alm_vault:'ALM vault',unknown:'Unknown'};
 const tnShort={hydrex_treasury_or_team:'team',managed_lock:'mgd-lock?',partner_project:'partner',individual_whale:'individual',alm_vault:'vault',unknown:'unknown'};
 const vsClass=s=>'vs-'+s.replace(' ','');
+const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
+// breadth (what they vote for) display from voting_style
+const brd={Anchored:['🎯','one pool'],Focused:['','1-3 pools'],'Fee Focus':['💸','fee-max'],Occasional:['','occasional'],Idle:['','—']};
+// mode (how they vote) display
+const modeIcon={Automated:'🤖','Active':'✋','Set-and-forget':'📌','Never voted':'⚪'};
 document.getElementById('cards').innerHTML=[
  ['Total voting power',VE(D.total),D.holders.toLocaleString()+' holders'],
  ['Hydrex (verified)',D.hydrex_ctrl+'%','treasury + signer team · +'+D.managed_pct+'% managed-locks'],
  ['#1 Treasury Safe',D.treasury_pct+'%','votes a void sink gauge'],
  ['Contestable',(100-D.hydrex_ctrl-D.managed_pct).toFixed(1)+'%','non-Hydrex holders'],
- ['Anchored / Focused',(D.styles.Anchored||0)+(D.styles.Focused||0)+' of 100','aligned voters (vs '+(D.styles['Fee Focus']||0)+' mercenary)'],
+ ['Vote modes',(D.modes.Automated||0)+'🤖 '+(D.modes.Active||0)+'✋ '+(D.modes['Set-and-forget']||0)+'📌','automated / active / set-&-forget (of top 100)'],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
  datasets:[{data:TYPE.map(t=>t[1]),backgroundColor:['#bc8cff','#3fb950','#58a6ff','#ff7b72','#8b949e','#d29922'],borderColor:'#161b22',borderWidth:2}]},
@@ -130,29 +141,35 @@ if(D.has_holdings){
      plugins:{legend:{position:'right',labels:{color:'#8b949e',font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'M veHYDX'}}},
      scales:{x:{stacked:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}},y:{stacked:true,ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});
 }else{document.getElementById('areaPanel').style.display='none';}
-const bk=ROWS.filter(r=>r.voting_style==='Anchored'&&r.entity_type!=='hydrex_treasury_or_team').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
-document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.likely_who}</b> <span class="m">${VE(r.vehydx)}</span> &mdash; ${r.dom_pool} ${r.epochs_voted}/${r.epochs_total}ep</div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`likely identity, how they vote across 10 epochs, and confidence &middot; <b style="color:var(--green)">${D.styles.Anchored||0} Anchored</b> &middot; <b style="color:var(--cyan)">${D.styles.Focused||0} Focused</b> &middot; <b style="color:var(--orange)">${D.styles['Fee Focus']||0} Fee Focus</b> &middot; <b style="color:var(--muted)">${D.styles.Idle||0} Idle</b>`;
-let styleFilter='All';
-const chips=['All','Anchored','Focused','Fee Focus','Occasional','Idle'];
-function renderChips(){document.getElementById('chips').innerHTML=chips.map(c=>`<span class="chip ${c===styleFilter?'on':''}" onclick="setStyle('${c}')">${c}</span>`).join('');}
-function setStyle(s){styleFilter=s;renderChips();render();}
+const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
+document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.vehydx)}</span> &mdash; ${modeIcon[r.vote_mode]||''} ${r.vote_mode.replace('Set-and-forget','set & forget').toLowerCase()}</div>`).join('')||'—';
+document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> × <b>how they vote</b> &middot; <b style="color:var(--orange)">${D.modes.Automated||0} 🤖 automated</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} ✋ active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} 📌 set-&-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} ⚪ never</b>`;
+let modeFilter='All';
+const chips=[['All','All'],['🤖 Automated','Automated'],['✋ Active','Active'],['📌 Set-and-forget','Set-and-forget'],['⚪ Never voted','Never voted']];
+function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl}</span>`).join('');}
+function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
 function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
- let rows=ROWS.filter(r=>(styleFilter==='All'||r.voting_style===styleFilter) && (!q||(r.likely_who+' '+(r.dom_pool||'')+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
+ let rows=ROWS.filter(r=>(modeFilter==='All'||r.vote_mode===modeFilter) && (!q||((r.dom_pool||'')+' '+r.vote_mode+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
- document.getElementById('tb').innerHTML=rows.map(r=>`<tr>
+ document.getElementById('tb').innerHTML=rows.map(r=>{
+  const b=brd[r.voting_style]||['','—'];
+  const votesFor = r.dom_pool
+    ? `<span class="brd">${b[0]} ${b[1]}</span><div class="sub2"><span class="tvpool">${r.dom_pool}</span>${r.voting_style==='Fee Focus'?' · spreads '+r.avg_pools_per_epoch+' pools/ep':''}</div>`
+    : `<span class="brd" style="color:var(--muted)">— never votes</span>`;
+  const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>`
+    : r.vote_mode==='Automated' ? `<div class="sub2">weekly, fixed time (R=${r.tod_R})</div>`
+    : r.vote_mode==='Active' ? `<div class="sub2">${r.n_revotes}× re-votes, varied times</div>` : '';
+  return `<tr>
   <td class="n" style="color:var(--muted)">${r.rank}</td>
-  <td><span class="who">${r.likely_who}</span><span class="et et-${r.entity_type}">${tnShort[r.entity_type]||r.entity_type}</span></td>
+  <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)} ↗</a></td>
   <td class="n">${VE(r.vehydx)}</td><td class="n">${r.pct}%</td>
   <td class="n">${dlt(r.delta_last)}</td>
-  <td class="n">${r.epochs_voted}/${r.epochs_total}</td>
-  <td><span class="vs ${vsClass(r.voting_style)}">${r.voting_style}</span>${r.dom_pool?` <span class="tvpool">${r.dom_pool}</span><div class="sub2">top in ${Math.round(r.dom_share*r.epochs_voted)}/${r.epochs_voted}ep · spreads ${r.avg_pools_per_epoch} pools/ep</div>`:''}</td>
-  <td><span class="badge b-${r.confidence}">${r.confidence}</span></td>
-  <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)} ↗</a></td>
- </tr>`).join('');
+  <td>${votesFor}</td>
+  <td><span class="md ${mdClass(r.vote_mode)}">${modeIcon[r.vote_mode]||''} ${r.vote_mode}</span>${lvSub}</td>
+ </tr>`;}).join('');
 }
 renderChips();render();
 </script></body></html>"""
