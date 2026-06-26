@@ -87,7 +87,6 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 @media(max-width:900px){.card{flex:1 1 100%}.row2{grid-template-columns:1fr}}
 </style></head><body>
 <h1>Hydrex veHYDX &mdash; Holder Intelligence</h1>
-<div class="sub">What each top veHYDX holder votes for, and how they vote (set-and-forget vs automated vs active). Epoch __EPOCH__ (__EPRANGE__) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
 <div class="cards" id="cards"></div>
 <div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
