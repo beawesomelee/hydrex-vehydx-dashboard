@@ -122,7 +122,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 <div class="foot">
 <b>Votes for</b> (last 10 epochs): <span class="brd">one pool</span> = same single pool &ge;80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">fee-max</span> = spreads across 4+ pools, no allegiance.<br>
 <b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote just persists &middot; <span class="md md-Active">Active</span> actively re-votes (changes its vote) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
-<b>Pattern:</b> single-pool holders are predominantly set-and-forget (committed, passive); fee-maximizers are predominantly active re-voters (chasing the best bribe). Internal BD intel &mdash; do not distribute.
+<b>Pattern:</b> single-pool holders are predominantly set-and-forget (committed, passive); fee-maximizers are predominantly active re-voters (chasing the best bribe).
 </div>
 <script>
 const ROWS=__ROWS__, D=__DATA__, AREA=__AREA__, STAKER=__STAKER__;
