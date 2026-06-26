@@ -31,6 +31,13 @@ try:
     HAS_STAKER=bool(SH.get("epochs"))
 except FileNotFoundError:
     STAKER=json.dumps({"epochs":[],"stakers":[],"total":[]}); HAS_STAKER=False
+# Total earning power per epoch from the Hydrex API (frontend's headline number)
+try:
+    EP=json.load(open("earning_power_history.json"))
+    EARN=json.dumps({"epochs":[f"ep{e}" for e in EP["epochs"]],"power":EP["earning_power_m"]})
+    EARN_TOTAL=EP["latest_earning_power"]; HAS_EARN=bool(EP.get("epochs"))
+except FileNotFoundError:
+    EARN=json.dumps({"epochs":[],"power":[]}); EARN_TOTAL=TOTAL; HAS_EARN=False
 # Current epoch derived from the data (max epoch present) so it auto-updates each refresh.
 import datetime as _dt
 EP39_START=1781136000; EPLEN=604800   # Hydrex epoch 39 start = 2026-06-11 00:00 UTC; 1 epoch = 1 week
@@ -39,8 +46,8 @@ _s=EP39_START+(CUR_EPOCH-39)*EPLEN
 EPOCH_RANGE=_dt.datetime.utcfromtimestamp(_s).strftime("%b %-d")+" – "+_dt.datetime.utcfromtimestamp(_s+EPLEN).strftime("%b %-d, %Y")
 DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"managed_pct":round(managed_pct,1),
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
-                 "epoch":CUR_EPOCH,"epoch_range":EPOCH_RANGE,
-                 "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN),"has_staker":HAS_STAKER})
+                 "epoch":CUR_EPOCH,"epoch_range":EPOCH_RANGE,"earning_total":EARN_TOTAL,
+                 "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN),"has_staker":HAS_STAKER,"has_earn":HAS_EARN})
 
 html = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -116,7 +123,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">each line = one holder's veHYDX balance (not votes) &middot; top 12 + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2" id="trends">
   <div class="panel"><h3>Stakers over time</h3><div class="hint">veHYDX holders per epoch since launch (current cohort) &mdash; protocol growth</div><div style="position:relative;height:250px"><canvas id="stakerChart"></canvas></div></div>
-  <div class="panel"><h3>Total veHYDX over time</h3><div class="hint">total voting power locked per epoch since launch</div><div style="position:relative;height:250px"><canvas id="totalChart"></canvas></div></div>
+  <div class="panel"><h3>Total earning power over time</h3><div class="hint">effective earning power per epoch since launch (Hydrex API) &mdash; matches frontend</div><div style="position:relative;height:250px"><canvas id="totalChart"></canvas></div></div>
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
@@ -125,7 +132,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 <b>Pattern:</b> single-pool holders are predominantly set-and-forget (committed, passive); fee-maximizers are predominantly active re-voters (chasing the best bribe).
 </div>
 <script>
-const ROWS=__ROWS__, D=__DATA__, AREA=__AREA__, STAKER=__STAKER__;
+const ROWS=__ROWS__, D=__DATA__, AREA=__AREA__, STAKER=__STAKER__, EARN=__EARN__;
 const VE=n=>(n>=1e6?(n/1e6).toFixed(2)+'M':(n/1e3).toFixed(0)+'K');
 const sc=a=>a.slice(0,6)+'…'+a.slice(-4);
 const dlt=v=>(v==null?'<span style="color:var(--muted)">—</span>':v>0?'<span style="color:var(--green)">+'+Math.round(v).toLocaleString()+'</span>':v<0?'<span style="color:var(--red)">'+Math.round(v).toLocaleString()+'</span>':'<span style="color:var(--muted)">0</span>');
@@ -136,7 +143,7 @@ const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 // breadth (what they vote for) display from voting_style
 const brd={Anchored:'one pool',Focused:'1-3 pools','Fee Focus':'fee-max',Occasional:'occasional',Idle:'—'};
 document.getElementById('cards').innerHTML=[
- ['Total Earning Power',VE(D.total),'total veHYDX voting power'],
+ ['Total Earning Power',VE(D.earning_total),'effective earning power (excl. non-voting treasury)'],
  ['Accounts',D.holders.toLocaleString(),'veHYDX holders'],
  ['Current Epoch','Epoch '+D.epoch,D.epoch_range],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
@@ -145,10 +152,10 @@ if(D.has_staker){
    datasets:[{label:'Stakers',data:STAKER.stakers,borderColor:'#58a6ff',backgroundColor:'#58a6ff22',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toLocaleString()+' stakers'}}},
      scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12},grid:{color:'#30363d'}},y:{beginAtZero:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}}}}});
- new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:STAKER.epochs,
-   datasets:[{label:'Total veHYDX',data:STAKER.total,borderColor:'#3fb950',backgroundColor:'#3fb95022',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
-   options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+'M veHYDX'}}},
-     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12},grid:{color:'#30363d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});
+ if(D.has_earn){new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:EARN.epochs,
+   datasets:[{label:'Earning power',data:EARN.power,borderColor:'#3fb950',backgroundColor:'#3fb95022',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
+   options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+'M earning power'}}},
+     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12},grid:{color:'#30363d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});}
 }else{document.getElementById('trends').style.display='none';}
 if(D.has_holdings){
  const pal=['#bc8cff','#ff7b72','#58a6ff','#3fb950','#d29922','#39d4cf','#ff7b9d','#a5d6ff','#f85149','#ffa657','#7ce38b','#d2a8ff'];
@@ -187,6 +194,6 @@ function render(){
 }
 renderChips();render();
 </script></body></html>"""
-html=html.replace("__ROWS__",ROWS).replace("__DATA__",DATA).replace("__AREA__",AREA).replace("__STAKER__",STAKER).replace("__EPOCH__",str(CUR_EPOCH)).replace("__EPRANGE__",EPOCH_RANGE)
+html=html.replace("__ROWS__",ROWS).replace("__DATA__",DATA).replace("__AREA__",AREA).replace("__STAKER__",STAKER).replace("__EARN__",EARN).replace("__EPOCH__",str(CUR_EPOCH)).replace("__EPRANGE__",EPOCH_RANGE)
 open("vehydx_dashboard_plain.html","w").write(html)
 print(f"wrote vehydx_dashboard_plain.html ({len(html)} bytes) | styles: {dict(style_ct)}")
