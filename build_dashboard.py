@@ -26,6 +26,7 @@ if rest: area.append({"label":"Other (top 100)","data":[round(sum(r.get('holding
 AREA=json.dumps({"epochs":[f"ep{e}" for e in EPN],"series":area})
 DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"managed_pct":round(managed_pct,1),
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
+                 "epoch":40,"epoch_range":"Jun 18 – 25, 2026",
                  "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN)})
 
 html = """<!DOCTYPE html>
@@ -122,8 +123,9 @@ const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 // breadth (what they vote for) display from voting_style
 const brd={Anchored:'one pool',Focused:'1-3 pools','Fee Focus':'fee-max',Occasional:'occasional',Idle:'—'};
 document.getElementById('cards').innerHTML=[
- ['Total voting power',VE(D.total),D.holders.toLocaleString()+' holders · top 100 shown'],
- ['Vote modes',(D.modes.Automated||0)+' / '+(D.modes.Active||0)+' / '+(D.modes['Set-and-forget']||0),'automated / active / set-and-forget (of top 100)'],
+ ['Current epoch','Epoch '+D.epoch,D.epoch_range],
+ ['veHYDX',VE(D.total),'total voting power this epoch'],
+ ['Accounts',D.holders.toLocaleString(),'veHYDX holders this epoch'],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
  datasets:[{data:TYPE.map(t=>t[1]),backgroundColor:['#bc8cff','#3fb950','#58a6ff','#ff7b72','#8b949e','#d29922'],borderColor:'#161b22',borderWidth:2}]},
