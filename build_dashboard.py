@@ -36,8 +36,8 @@ html = """<!DOCTYPE html>
 :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff;--pink:#ff7b72;--cyan:#39d4cf;}
 *{box-sizing:border-box}body{margin:0;padding:24px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 h1{margin:0 0 4px;font-size:22px}.sub{color:var(--muted);font-size:13px;margin-bottom:20px}
-.cards{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px}
+.cards{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+.card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;flex:0 1 300px}
 .cl{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
 .cv{font-size:22px;font-weight:600}.cs{color:var(--muted);font-size:11px;margin-top:3px}
 .row2{display:grid;grid-template-columns:1.25fr 1fr;gap:16px;margin-bottom:20px}
@@ -77,7 +77,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 .foot{color:var(--muted);font-size:11px;margin-top:18px;line-height:1.7}
 .pill{display:inline-block;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:7px 10px;margin:0 7px 7px 0;font-size:12px}
 .pill b{color:var(--text)}.pill .m{color:var(--muted)}
-@media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.row2{grid-template-columns:1fr}}
+@media(max-width:900px){.card{flex:1 1 100%}.row2{grid-template-columns:1fr}}
 </style></head><body>
 <h1>Hydrex veHYDX &mdash; Holder Intelligence</h1>
 <div class="sub">What each top veHYDX holder votes for, and how they vote (set-and-forget vs automated vs active). Snapshot 2026-06-25 (epoch 40) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
@@ -98,7 +98,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
     <th onclick="sort('voting_style')">Votes for</th>
     <th onclick="sort('vote_mode')">How they vote</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
-  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder &mdash; the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M veHYDX = 61.65%</b> &mdash; is held out of the leaderboard: it votes a void/sink gauge (SpecialGaugeToken1/2), so it does not compete for partner emissions. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
+  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder &mdash; the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M veHYDX = 61.65%</b> &mdash; is excluded because it <b>does not vote on any active pool</b>: it parks its votes in a void/sink gauge (SpecialGaugeToken1/2), so it never competes for partner emissions. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">top 12 holders + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2">
@@ -122,10 +122,7 @@ const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 // breadth (what they vote for) display from voting_style
 const brd={Anchored:'one pool',Focused:'1-3 pools','Fee Focus':'fee-max',Occasional:'occasional',Idle:'—'};
 document.getElementById('cards').innerHTML=[
- ['Total voting power',VE(D.total),D.holders.toLocaleString()+' holders'],
- ['Hydrex (verified)',D.hydrex_ctrl+'%','treasury + signer team · +'+D.managed_pct+'% managed-locks'],
- ['#1 Treasury Safe',D.treasury_pct+'%','votes a void sink gauge'],
- ['Contestable',(100-D.hydrex_ctrl-D.managed_pct).toFixed(1)+'%','non-Hydrex holders'],
+ ['Total voting power',VE(D.total),D.holders.toLocaleString()+' holders · top 100 shown'],
  ['Vote modes',(D.modes.Automated||0)+' / '+(D.modes.Active||0)+' / '+(D.modes['Set-and-forget']||0),'automated / active / set-and-forget (of top 100)'],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
