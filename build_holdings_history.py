@@ -45,7 +45,9 @@ wallets=[f["wallet"] for f in json.load(open("top100_facts.json"))["facts"]]
 latest=int(rpc("eth_blockNumber",[]),16); now=int(rpc("eth_getBlockByNumber",[hex(latest),False])["timestamp"],16)
 EP39_START=1781136000; EPLEN=604800
 def block_at(ts): return max(1,latest-(now-ts)//2)
-epochs=list(range(31,41))
+CUR=39+(now-EP39_START)//EPLEN
+while EP39_START+(CUR-39)*EPLEN+5*86400>now: CUR-=1   # latest epoch whose +5d sample has passed
+epochs=list(range(CUR-9,CUR+1))                        # rolling last 10 epochs -> auto-advances each refresh
 ep_block={K: hex(block_at(EP39_START+(K-39)*EPLEN+5*86400)) for K in epochs}
 print(f"holdings scan (balanceOfNFT-sum): {len(wallets)} wallets x {len(epochs)} epochs", flush=True)
 hist={w:{} for w in wallets}

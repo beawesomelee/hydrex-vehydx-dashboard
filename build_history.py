@@ -41,9 +41,11 @@ F=json.load(open("top100_facts.json")); wallets=[f["wallet"] for f in F["facts"]
 latest=int(rpc("eth_blockNumber",[]),16); now=int(rpc("eth_getBlockByNumber",[hex(latest),False])["timestamp"],16)
 EP39=1781136000; EPLEN=604800
 def block_at(ts): return max(1,latest-(now-ts)//2)
-epochs=list(range(31,41))
-ep_block={K:("latest" if K==40 else hex(block_at(EP39+(K-39)*EPLEN+5*86400))) for K in epochs}
-print(f"history(robust v2): {len(wallets)}w x {len(pools)}p x {len(epochs)}ep", flush=True)
+CUR=39+(now-EP39)//EPLEN
+while EP39+(CUR-39)*EPLEN+5*86400>now: CUR-=1   # latest epoch whose +5d sample point has passed
+epochs=list(range(CUR-9,CUR+1))                  # rolling last 10 epochs -> auto-advances each refresh
+ep_block={K: hex(block_at(EP39+(K-39)*EPLEN+5*86400)) for K in epochs}
+print(f"history(robust v2): {len(wallets)}w x {len(pools)}p x epochs {epochs[0]}..{epochs[-1]}", flush=True)
 hist={w:{} for w in wallets}
 for K in epochs:
     block=ep_block[K]; epnz=0; epfail=0

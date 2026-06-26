@@ -24,9 +24,15 @@ TOPN=12; top=hsorted[:TOPN]; rest=hsorted[TOPN:]
 area=[{"label":f"#{r['rank']} {r.get('dom_pool') or r['wallet'][:8]}"[:28],"data":hser(r)} for r in top]
 if rest: area.append({"label":"Other (top 100)","data":[round(sum(r.get('holdings',{}).get(str(e),0) for r in rest)/1e6,3) for e in EPN]})
 AREA=json.dumps({"epochs":[f"ep{e}" for e in EPN],"series":area})
+# Current epoch derived from the data (max epoch present) so it auto-updates each refresh.
+import datetime as _dt
+EP39_START=1781136000; EPLEN=604800   # Hydrex epoch 39 start = 2026-06-11 00:00 UTC; 1 epoch = 1 week
+CUR_EPOCH=max(EPN) if EPN else 40
+_s=EP39_START+(CUR_EPOCH-39)*EPLEN
+EPOCH_RANGE=_dt.datetime.utcfromtimestamp(_s).strftime("%b %-d")+" – "+_dt.datetime.utcfromtimestamp(_s+EPLEN).strftime("%b %-d, %Y")
 DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"managed_pct":round(managed_pct,1),
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
-                 "epoch":40,"epoch_range":"Jun 18 – 25, 2026",
+                 "epoch":CUR_EPOCH,"epoch_range":EPOCH_RANGE,
                  "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN)})
 
 html = """<!DOCTYPE html>
@@ -37,7 +43,7 @@ html = """<!DOCTYPE html>
 :root{--bg:#0d1117;--panel:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--green:#3fb950;--red:#f85149;--orange:#d29922;--purple:#bc8cff;--pink:#ff7b72;--cyan:#39d4cf;}
 *{box-sizing:border-box}body{margin:0;padding:24px;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
 h1{margin:0 0 4px;font-size:22px}.sub{color:var(--muted);font-size:13px;margin-bottom:20px}
-.cards{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px}
+.cards{display:flex;flex-wrap:wrap;justify-content:center;gap:12px;margin-bottom:20px}
 .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;flex:0 1 300px}
 .cl{color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
 .cv{font-size:22px;font-weight:600}.cs{color:var(--muted);font-size:11px;margin-top:3px}
@@ -81,7 +87,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 @media(max-width:900px){.card{flex:1 1 100%}.row2{grid-template-columns:1fr}}
 </style></head><body>
 <h1>Hydrex veHYDX &mdash; Holder Intelligence</h1>
-<div class="sub">What each top veHYDX holder votes for, and how they vote (set-and-forget vs automated vs active). Snapshot 2026-06-25 (epoch 40) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
+<div class="sub">What each top veHYDX holder votes for, and how they vote (set-and-forget vs automated vs active). Epoch __EPOCH__ (__EPRANGE__) &middot; on-chain veHYDX VotingEscrow + Voter, Base &middot; top 100 of 3,780 holders.</div>
 <div class="cards" id="cards"></div>
 <div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
@@ -123,9 +129,9 @@ const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 // breadth (what they vote for) display from voting_style
 const brd={Anchored:'one pool',Focused:'1-3 pools','Fee Focus':'fee-max',Occasional:'occasional',Idle:'—'};
 document.getElementById('cards').innerHTML=[
- ['Current epoch','Epoch '+D.epoch,D.epoch_range],
- ['veHYDX',VE(D.total),'total voting power this epoch'],
- ['Accounts',D.holders.toLocaleString(),'veHYDX holders this epoch'],
+ ['Total Earning Power',VE(D.total),'total veHYDX voting power'],
+ ['Accounts',D.holders.toLocaleString(),'veHYDX holders'],
+ ['Current Epoch','Epoch '+D.epoch,D.epoch_range],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 new Chart(document.getElementById('chart'),{type:'doughnut',data:{labels:TYPE.map(t=>tn[t[0]]||t[0]),
  datasets:[{data:TYPE.map(t=>t[1]),backgroundColor:['#bc8cff','#3fb950','#58a6ff','#ff7b72','#8b949e','#d29922'],borderColor:'#161b22',borderWidth:2}]},
@@ -169,6 +175,6 @@ function render(){
 }
 renderChips();render();
 </script></body></html>"""
-html=html.replace("__ROWS__",ROWS).replace("__TYPE__",TYPE).replace("__DATA__",DATA).replace("__AREA__",AREA)
+html=html.replace("__ROWS__",ROWS).replace("__TYPE__",TYPE).replace("__DATA__",DATA).replace("__AREA__",AREA).replace("__EPOCH__",str(CUR_EPOCH)).replace("__EPRANGE__",EPOCH_RANGE)
 open("vehydx_dashboard_plain.html","w").write(html)
 print(f"wrote vehydx_dashboard_plain.html ({len(html)} bytes) | styles: {dict(style_ct)}")

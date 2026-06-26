@@ -45,8 +45,10 @@ wallets=[f["wallet"] for f in json.load(open("top100_facts.json"))["facts"]]
 latest=int(rpc("eth_blockNumber",[]),16); now=int(rpc("eth_getBlockByNumber",[hex(latest),False])["timestamp"],16)
 EP39=1781136000; EPLEN=604800
 def block_at(ts): return max(1,latest-(now-ts)//2)
-blocks=[hex(block_at(EP39+(K-39)*EPLEN+5*86400)) for K in range(31,41)]+["latest"]
-print(f"revote scan: {len(wallets)} wallets x {len(blocks)} samples", flush=True)
+CUR=39+(now-EP39)//EPLEN
+while EP39+(CUR-39)*EPLEN+5*86400>now: CUR-=1   # rolling last 10 epochs -> auto-advances each refresh
+blocks=[hex(block_at(EP39+(K-39)*EPLEN+5*86400)) for K in range(CUR-9,CUR+1)]+["latest"]
+print(f"revote scan: {len(wallets)} wallets x {len(blocks)} samples (epochs {CUR-9}..{CUR})", flush=True)
 series={w:[] for w in wallets}
 for blk in blocks:
     res=mc_lv(wallets, blk)
