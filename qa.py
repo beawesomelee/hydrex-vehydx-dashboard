@@ -97,21 +97,19 @@ if R:
     check("'likely <Partner>' labels match their dominant vote pool", not bad,
           f"inconsistent: {bad[:3]} (NOCK-class mislabel)")
 
-print("\n== E. dashboard + security integrity ==")
+print("\n== E. dashboard integrity (public, unencrypted) ==")
 try:
-    enc=open("vehydx_dashboard.html").read()
-    check("encrypted dashboard has the lock UI", "Enter passphrase to decrypt" in enc)
-    check("ciphertext present (long CT base64 blob)", bool(re.search(r'CT="[A-Za-z0-9+/=]{2000,}"', enc)))
-    check("passphrase NOT embedded in encrypted file", "veHYDXbreakdown" not in enc and "demo-pass" not in enc)
     idx=open("index.html").read()
-    check("index.html == encrypted dashboard (root serves it)", idx==enc)
+    check("index.html is the dashboard (behavior table + tiles)", "Voter Behavior" in idx and "Total Earning Power" in idx)
+    check("index.html serves directly (no password gate)", "Enter passphrase to decrypt" not in idx and 'id="CT"' not in idx)
+    check("index.html carries the holder rows", "const ROWS=[" in idx and idx.count('"wallet"')>=90)
+    check("index.html has both trend charts", "stakerChart" in idx and "totalChart" in idx)
 except FileNotFoundError as e:
     check("dashboard files present", False, str(e))
-# git: ensure no plaintext data/dashboard is tracked
+# git: ensure raw intermediate data files (csv/json) are never committed
 tracked=subprocess.run(["git","ls-files"],capture_output=True,text=True).stdout.split()
-leak=[f for f in tracked if f.endswith((".csv",)) or f=="vehydx_dashboard_plain.html"
-      or (f.endswith(".json") and f!="package.json")]
-check("no plaintext data/dashboard committed (gitignore working)", not leak, f"LEAKED: {leak}")
+leak=[f for f in tracked if f.endswith((".csv",)) or (f.endswith(".json") and f!="package.json")]
+check("no raw data files committed (gitignore working)", not leak, f"LEAKED: {leak}")
 
 print("\n== F. holdings history (Δ + area chart) ==")
 if R and any(r.get("holdings") for r in R):
