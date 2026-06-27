@@ -44,7 +44,7 @@ for r in R:
 # PUBLIC PROJECTION: the page is public, so ship ONLY the fields the UI renders. Never embed the
 # internal attribution dossier (likely_who, safe_owners, confidence, entity_type, codehash,
 # treasury_signer_match, behavior_10ep, cur_targets, ...) — those stay in R for build-time aggregates only.
-_PUB=["rank","wallet","vehydx","earn","earn_pct","earn_delta","dom_pool","voting_style","vote_mode","last_vote","cur","cur_targets","holdings"]
+_PUB=["rank","wallet","vehydx","earn","earn_pct","earn_delta","dom_pool","voting_style","vote_mode","automated","last_vote","cur","cur_targets","holdings"]
 ROWS=json.dumps([{k:r.get(k) for k in _PUB} for r in R])
 TYPE=json.dumps([[k,round(v/1e6,2)] for k,v in sorted(by_type.items(),key=lambda x:-x[1])])
 # stacked-area: top-12 holders' holdings over epochs + "Other (top 100)"
@@ -102,9 +102,8 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .vs-FeeFocus{background:rgba(210,153,34,.16);color:var(--orange)}
 .vs-Idle{background:rgba(139,148,158,.14);color:var(--muted)}
 .md{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap}
-.md-Automated{background:rgba(210,153,34,.18);color:var(--orange)}
-.md-Active{background:rgba(57,212,207,.16);color:var(--cyan)}
-.md-Setandforget{background:rgba(63,185,80,.16);color:var(--green)}
+.md-Automated{background:rgba(188,140,255,.18);color:var(--purple)}
+.md-Manual{background:rgba(57,212,207,.16);color:var(--cyan)}
 .md-Nevervoted{background:rgba(139,148,158,.14);color:var(--muted)}
 .brd{font-weight:700;font-size:12px}
 .et{font-size:9.5px;padding:1px 6px;border-radius:4px;margin-left:6px;white-space:nowrap}
@@ -138,7 +137,8 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
     <th class="n" onclick="sort('earn_pct')">%</th>
     <th class="n" onclick="sort('earn_delta')">&Delta; epoch</th>
     <th onclick="sort('voting_style')">Votes for</th>
-    <th onclick="sort('vote_mode')">How they vote</th>
+    <th onclick="sort('automated')">How they vote</th>
+    <th>Strategy</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
   <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder, the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), is excluded because it <b>does not vote on any active pool</b>, so it earns nothing. Earning power = veHYDX voting power boosted ~1.3&times; (matches the Hydrex frontend); &Delta; epoch = change vs the previous epoch.</div>
 </div>
@@ -150,8 +150,9 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
 <b>Votes for</b> = the pool(s) the wallet currently allocates its vote to (top pool first; more below it) &middot; <span class="brd">fee-max</span> = spreads across many pools with no allegiance.<br>
-<b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote just persists &middot; <span class="md md-Active">Active</span> actively re-votes (changes its vote) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
-<b>Pattern:</b> single-pool holders are predominantly set-and-forget (committed, passive); fee-maximizers are predominantly active re-voters (chasing the best bribe).
+<b>How they vote</b>: <span class="md md-Automated">Automated</span> uses Hydrex Account Automation &mdash; a keeper votes for them per their chosen strategy (on-chain: approved the automation manager) &middot; <span class="md md-Manual">Manual</span> votes themselves (subtext: <i>set once</i> or <i>active</i> re-voter) &middot; <span class="md md-Nevervoted">Never voted</span> not automated and has never voted (truly dormant).<br>
+<b>Strategy</b>: for automated wallets, the gauge basket the automation currently votes (top pool + count). Official strategy names (Bluechips, Base Memes, &hellip;) live in Hydrex's backend &mdash; will be swapped in.<br>
+<b>Note:</b> several wallets that show no vote are <b>automated</b> (delegated to Hydrex automation on a yield strategy), not dormant &mdash; the "never voted" filter shows only truly dormant, non-automated holders.
 </div>
 <script>
 const ROWS=__ROWS__, D=__DATA__, AREA=__AREA__, STAKER=__STAKER__, EARN=__EARN__;
@@ -162,6 +163,7 @@ const tn={hydrex_treasury_or_team:'Hydrex team/treasury',managed_lock:'Hydrex ma
 const tnShort={hydrex_treasury_or_team:'team',managed_lock:'mgd-lock?',partner_project:'partner',individual_whale:'individual',alm_vault:'vault',unknown:'unknown'};
 const vsClass=s=>'vs-'+s.replace(' ','');
 const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
+const howMode=r=>r.automated?'Automated':(r.vote_mode==='Never voted'?'Never voted':'Manual');
 // breadth (what they vote for) display from voting_style
 document.getElementById('cards').innerHTML=[
  ['Total Earning Power',D.has_earn?VE(D.earning_total):'—','effective earning power (excl. non-voting treasury)'],
@@ -187,17 +189,24 @@ if(D.has_holdings){
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} set-and-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} never voted</b> <span style="color:var(--muted)">(hidden &mdash; click the chip to show)</span>`;
+document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--purple)">${ROWS.filter(r=>r.automated).length} automated</b> &middot; <b style="color:var(--cyan)">${ROWS.filter(r=>howMode(r)==='Manual').length} manual</b> &middot; <b style="color:var(--muted)">${ROWS.filter(r=>howMode(r)==='Never voted').length} dormant</b> <span style="color:var(--muted)">(hidden &mdash; click the chip to show)</span>`;
 let modeFilter='All';   // 'All' = everyone who votes; never-voted hidden until you click that chip
-const chips=[['Voters','All'],['Active','Active'],['Set-and-forget','Set-and-forget'],['Never voted','Never voted']];
-function chipCount(v){return v==='All'?ROWS.filter(r=>r.vote_mode!=='Never voted').length:ROWS.filter(r=>r.vote_mode===v).length;}
+const chips=[['Voters','All'],['Automated','Automated'],['Manual','Manual'],['Never voted','Never voted']];
+function chipCount(v){return v==='All'?ROWS.filter(r=>howMode(r)!=='Never voted').length
+   :v==='Automated'?ROWS.filter(r=>r.automated).length
+   :v==='Manual'?ROWS.filter(r=>howMode(r)==='Manual').length
+   :ROWS.filter(r=>howMode(r)==='Never voted').length;}
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl} <span style="opacity:.55">${chipCount(val)}</span></span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
 function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
- let rows=ROWS.filter(r=>(modeFilter==='All' ? r.vote_mode!=='Never voted' : r.vote_mode===modeFilter) && (!q||((r.dom_pool||'')+' '+r.vote_mode+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
+ let rows=ROWS.filter(r=>( modeFilter==='All' ? howMode(r)!=='Never voted'
+     : modeFilter==='Automated' ? r.automated
+     : modeFilter==='Manual' ? howMode(r)==='Manual'
+     : howMode(r)==='Never voted' )
+   && (!q||((r.dom_pool||'')+' '+(r.automated?'automated':'manual')+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
   const cur = r.cur_targets||[];
@@ -205,14 +214,20 @@ function render(){
     : cur.length===0 ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
     : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
     : `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`;
-  const lvSub = '';
+  const hm = howMode(r);
+  const howSub = hm==='Manual' ? `<div class="sub2">${r.vote_mode==='Set-and-forget'?'set once':'active'}</div>` : '';
+  const strat = !r.automated ? `<span style="color:var(--muted)">—</span>`
+    : cur.length===0 ? `<span class="sub2">yield only (no gauge vote)</span>`
+    : cur.length===1 ? `${cur[0][0]}`
+    : `${cur[0][0]} <span class="sub2">+${cur.length-1} more</span>`;
   return `<tr>
   <td style="color:var(--muted)">${r.rank}</td>
   <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>
   <td class="n">${VE(r.earn)}</td><td class="n">${r.earn_pct}%</td>
   <td class="n">${dlt(r.earn_delta)}</td>
   <td>${votesFor}</td>
-  <td><span class="md ${mdClass(r.vote_mode)}">${r.vote_mode}</span>${lvSub}</td>
+  <td><span class="md ${mdClass(hm)}">${hm}</span>${howSub}</td>
+  <td>${strat}</td>
  </tr>`;}).join('');
 }
 renderChips();render();

@@ -28,10 +28,13 @@ if facts:
     check("top100_facts has 100 wallets", len(facts.get("facts",[]))==100, f"got {len(facts.get('facts',[]))}")
 if R:
     check("labeled output has 100 rows", len(R)==100, f"got {len(R)}")
-    need=["likely_who","entity_type","confidence","voting_style","epochs_voted","dom_pool","dom_share","avg_pools_per_epoch","vote_mode"]
+    need=["likely_who","entity_type","confidence","voting_style","epochs_voted","dom_pool","dom_share","avg_pools_per_epoch","vote_mode","automated"]
     miss=[r["rank"] for r in R if any(k not in r for k in need)]
     check("every row has all required fields", not miss, f"missing on ranks {miss[:5]}")
     check("vote_mode values valid", all(r.get("vote_mode") in ("Active","Set-and-forget","Never voted","—") for r in R))
+    check("automated is boolean on every row", all(isinstance(r.get("automated"),bool) for r in R))
+    n_auto=sum(1 for r in R if r.get("automated"))
+    check("automated count is plausible (1..99, not all/none)", 1<=n_auto<=99, f"n_auto={n_auto}")
     check("'Active' implies it actually re-voted (n_revotes>=2)", all(r.get("vote_mode")!="Active" or r.get("n_revotes",0)>=2 for r in R))
     check("'Set-and-forget' implies exactly one vote (n_revotes==1)", all(r.get("vote_mode")!="Set-and-forget" or r.get("n_revotes",0)==1 for r in R))
     check("confidence values valid", all(r["confidence"] in ("high","medium","low") for r in R))

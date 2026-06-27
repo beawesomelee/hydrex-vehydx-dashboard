@@ -136,6 +136,12 @@ try:
         r["last_vote"]=m.get("last_vote"); r["n_revotes"]=m.get("n_revotes",0)
 except FileNotFoundError:
     for r in rows: r["vote_mode"]="—"; r["tod_R"]=None; r["last_vote"]=None; r["n_revotes"]=0
+# attach Manual vs Automated (Hydrex Account Automation = operator-approved the automation manager)
+try:
+    AUT=json.load(open("automation.json"))
+    for r in rows: r["automated"]=bool(AUT.get(r["wallet"].lower(), False))
+except FileNotFoundError:
+    for r in rows: r["automated"]=False
 with open("vehydx_top100_labeled.csv","w",newline="") as fp:
     wr=csv.writer(fp); wr.writerow(["rank","wallet","vehydx","pct","delta_last_epoch","vote_breadth","vote_mode","dom_pool","avg_pools_per_epoch","last_vote_utc","n_revotes","type","entity_type","confidence","likely_who","behavior_last_10_epochs","current_top_votes"])
     import datetime as _dt

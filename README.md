@@ -24,6 +24,7 @@ python3 build_holdings_history.py  # last-10-epoch holdings: Δ column + area ch
 python3 build_revote_history.py    # lastVoted analysis -> vote mode (set-and-forget/active/never) (~2 min)
 python3 build_staker_history.py    # staker count + on-chain veHYDX per epoch, full history (~8 min)
 python3 build_earning_power.py     # total earning power per epoch from api.hydrex.fi/epochs (matches frontend)
+python3 build_automation.py        # Manual vs Automated per wallet (isApprovedForAll to the automation manager)
 python3 synth.py                   # votes-for (breadth) + vote mode + Δ -> vehydx_top100_labeled.json
 python3 build_dashboard.py         # render -> vehydx_dashboard_plain.html
 cp vehydx_dashboard_plain.html index.html   # publish the plaintext root
