@@ -65,7 +65,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
     <th>Votes for</th>
     <th onclick="sort('automated')">Automation</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
-  <div class="sub2" style="margin-top:10px">* Each row is one veHYDX lock (veNFT); <b>Account #</b> = its token ID, ranked by the lock's own power. The treasury genesis lock (<b>Account #1</b>, <a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>) is excluded &mdash; it parks its vote in a sink and earns nothing. Earning power = the lock's veHYDX boosted ~1.3&times;; votes &amp; automation are per-owner.</div>
+  <div class="sub2" style="margin-top:10px">* Each row is one veHYDX lock (veNFT); <b>Account #</b> = its token ID, ranked by the lock's own power. The treasury genesis lock (<b>Account #1</b>, <a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>) is excluded &mdash; it parks its vote in a sink and earns nothing. Votes &amp; automation are per-owner.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">each line = one holder's veHYDX balance (not votes) &middot; top 12 + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2" id="trends">
@@ -89,8 +89,8 @@ const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 const howMode=r=>r.automated?'Automated':(r.vote_mode==='Never voted'?'Never voted':'Manual');
 // breadth (what they vote for) display from voting_style
 document.getElementById('cards').innerHTML=[
- ['Total Earning Power',D.has_earn?VE(D.earning_total):'—','effective earning power (excl. non-voting treasury)'],
- ['Accounts',D.holders.toLocaleString(),'veHYDX holders'],
+ ['Total Earning Power',D.has_earn?VE(D.earning_total):'—',''],
+ ['Accounts',D.holders.toLocaleString(),''],
  ['Current Epoch','Epoch '+D.epoch,D.epoch_range],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
 if(D.has_staker){new Chart(document.getElementById('stakerChart'),{type:'line',data:{labels:STAKER.epochs,
@@ -111,7 +111,7 @@ if(D.has_holdings){
      scales:{x:{stacked:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}},y:{stacked:true,ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
-document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
+document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · <a href="https://basescan.org/address/${r.wallet}" target="_blank">${sc(r.wallet)}</a></span></div>`).join('')||'—';
 document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> individual veHYDX locks (treasury #1 excluded) &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b> (Lock&nbsp;Maxi auto-compound) &middot; ${D.n_vowners} distinct owners`;
 let modeFilter='All';
 const chips=[['All','All'],['Automated','Automated'],['Manual','Manual']];
@@ -126,9 +126,11 @@ function render(){
    && (!q||(('#'+r.account)+' '+r.owner+' '+(r.cur.map(c=>c[0]).join(' '))+' '+(r.strategy||'')).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
-  const cur=r.cur||[];
+  const cur=r.cur||[]; const csum=cur.reduce((a,c)=>a+(c[1]||0),0);
+  // show the dominant (consistent) pool; for spreaders the long-tail is noisy/inconsistent, so flag it
   const votesFor = cur.length===0 ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
-    : `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`;
+    : csum>=80 ? `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`
+    : `<span class="brd">${cur[0][0]}</span><div class="sub2">+ spreads across more</div>`;
   const aut = r.automated ? `<span class="md md-Automated">${r.strategy||'Automated'}</span>` : `<span style="color:var(--muted)">—</span>`;
   return `<tr>
   <td class="n" style="color:var(--muted)">${r.rank}</td>
