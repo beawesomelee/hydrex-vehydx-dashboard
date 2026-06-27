@@ -115,21 +115,23 @@ if(D.has_holdings){
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} set-and-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} never</b>`;
-let modeFilter='All';
-const chips=[['All','All'],['Active','Active'],['Set-and-forget','Set-and-forget'],['Never voted','Never voted']];
-function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl}</span>`).join('');}
+document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} set-and-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} never voted</b> <span style="color:var(--muted)">(hidden &mdash; click the chip to show)</span>`;
+let modeFilter='All';   // 'All' = everyone who votes; never-voted hidden until you click that chip
+const chips=[['Voters','All'],['Active','Active'],['Set-and-forget','Set-and-forget'],['Never voted','Never voted']];
+function chipCount(v){return v==='All'?ROWS.filter(r=>r.vote_mode!=='Never voted').length:ROWS.filter(r=>r.vote_mode===v).length;}
+function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl} <span style="opacity:.55">${chipCount(val)}</span></span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
 function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
- let rows=ROWS.filter(r=>(modeFilter==='All'||r.vote_mode===modeFilter) && (!q||((r.dom_pool||'')+' '+r.vote_mode+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
+ let rows=ROWS.filter(r=>(modeFilter==='All' ? r.vote_mode!=='Never voted' : r.vote_mode===modeFilter) && (!q||((r.dom_pool||'')+' '+r.vote_mode+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
   const votesFor = r.vote_mode==='Never voted' ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
     : !r.dom_pool ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
     : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
+    : r.voting_style==='Anchored' ? `<span class="brd">${r.dom_pool}</span>`
     : `<span class="brd">${brd[r.voting_style]||'—'}</span><div class="sub2">${r.dom_pool}</div>`;
   const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>` : '';
   return `<tr>
