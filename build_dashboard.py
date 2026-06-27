@@ -29,6 +29,22 @@ for r in R:
     r["earn"]=round(r["vehydx"]*EARN_FACTOR)
     r["earn_pct"]=round(r["earn"]/EARN_TOTAL*100,3) if EARN_TOTAL else 0
     r["earn_delta"]=round(r["delta_last"]*EARN_FACTOR) if r.get("delta_last") is not None else None
+# Per-veNFT table rows (top 500 individual locks; treasury genesis lock #1 excluded like before).
+try:
+    _TOPV=json.load(open("top500_venfts.json")); _BEHV={k.lower():v for k,v in json.load(open("venft_owner_behavior.json")).items()}
+    _vr=[]
+    for x in _TOPV:
+        if int(x["tokenId"])==1: continue   # treasury genesis lock — excluded
+        o=x["owner"].lower(); b=_BEHV.get(o,{}); earn=round(x["power"]/1e18*EARN_FACTOR)
+        _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
+            "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
+            "cur":b.get("cur_targets") or [],"automated":bool(b.get("automated")),"strategy":b.get("strategy")})
+    for i,r in enumerate(_vr,1): r["rank"]=i
+    HAS_VENFT=bool(_vr)
+except FileNotFoundError:
+    _vr=[]; HAS_VENFT=False
+VROWS=json.dumps(_vr)
+N_VAUTO=sum(1 for r in _vr if r["automated"]); N_VOWNERS=len({r["owner"].lower() for r in _vr})
 team=sum(r["vehydx"] for r in R if r["entity_type"]=="hydrex_treasury_or_team")
 managed=sum(r["vehydx"] for r in R if r["entity_type"]=="managed_lock")
 hydrex_ctrl = TREASURY_PCT + team/TOTAL*100          # verified Hydrex only (treasury + signer team)
@@ -70,7 +86,8 @@ EPOCH_RANGE=_dt.datetime.utcfromtimestamp(_s).strftime("%b %-d")+" – "+_dt.dat
 DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"managed_pct":round(managed_pct,1),
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
                  "epoch":CUR_EPOCH,"epoch_range":EPOCH_RANGE,"earning_total":EARN_TOTAL,
-                 "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN),"has_staker":HAS_STAKER,"has_earn":HAS_EARN})
+                 "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN),"has_staker":HAS_STAKER,"has_earn":HAS_EARN,
+                 "n_vauto":N_VAUTO,"n_vowners":N_VOWNERS,"has_venft":HAS_VENFT})
 
 html = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -125,22 +142,21 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 <div class="cards" id="cards"></div>
 <div class="panel">
   <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:4px">
-    <h3 style="margin:0">Voter Behavior</h3>
-    <input id="q" placeholder="filter pool / mode / address…" oninput="render()"/>
+    <h3 style="margin:0">Top Accounts (by lock)</h3>
+    <input id="q" placeholder="filter account / owner / pool…" oninput="render()"/>
   </div>
   <div class="hint" id="styleline"></div>
   <div style="margin:6px 0 12px" id="chips"></div>
   <div class="tablewrap"><table id="t"><thead><tr>
     <th onclick="sort('rank')">#</th>
-    <th>Wallet</th>
+    <th onclick="sort('account')">Account #</th>
+    <th>Owner</th>
     <th class="n" onclick="sort('earn')">Earning power</th>
     <th class="n" onclick="sort('earn_pct')">%</th>
-    <th class="n" onclick="sort('earn_delta')">&Delta; epoch</th>
-    <th onclick="sort('voting_style')">Votes for</th>
-    <th onclick="sort('automated')">How they vote</th>
-    <th>Strategy</th>
+    <th>Votes for</th>
+    <th onclick="sort('automated')">Automation</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
-  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder, the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), is excluded because it <b>does not vote on any active pool</b>, so it earns nothing. Earning power = veHYDX voting power boosted ~1.3&times; (matches the Hydrex frontend); &Delta; epoch = change vs the previous epoch.</div>
+  <div class="sub2" style="margin-top:10px">* Each row is one veHYDX lock (veNFT); <b>Account #</b> = its token ID, ranked by the lock's own power. The treasury genesis lock (<b>Account #1</b>, <a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>) is excluded &mdash; it parks its vote in a sink and earns nothing. Earning power = the lock's veHYDX boosted ~1.3&times;; votes &amp; automation are per-owner.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">each line = one holder's veHYDX balance (not votes) &middot; top 12 + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2" id="trends">
@@ -149,13 +165,11 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
-<b>Votes for</b> = the pool(s) the wallet currently allocates its vote to (top pool first; more below it) &middot; <span class="brd">fee-max</span> = spreads across many pools with no allegiance.<br>
-<b>How they vote</b>: <span class="md md-Automated">Automated</span> uses Hydrex Account Automation &mdash; a keeper votes for them per their chosen strategy (on-chain: approved the automation manager) &middot; <span class="md md-Manual">Manual</span> votes themselves (subtext: <i>set once</i> or <i>active</i> re-voter) &middot; <span class="md md-Nevervoted">Never voted</span> not automated and has never voted (truly dormant).<br>
-<b>Strategy</b>: for automated wallets, the gauge basket the automation currently votes (top pool + count). Official strategy names (Bluechips, Base Memes, &hellip;) live in Hydrex's backend &mdash; will be swapped in.<br>
-<b>Note:</b> several wallets that show no vote are <b>automated</b> (delegated to Hydrex automation on a yield strategy), not dormant &mdash; the "never voted" filter shows only truly dormant, non-automated holders.
+<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. <b>Votes for</b> = the pool(s) the lock's <i>owner</i> currently votes &mdash; one owner casts one vote across all their locks. <b>Automation</b> = the owner uses a Hydrex Account-Automation conduit (<span class="md md-Automated">Lock Maxi</span> auto-compounds the lock into more veHYDX; it does <i>not</i> change the vote).<br>
+Top 500 of ~846 active locks; locks &ge;30K veHYDX are complete, the bottom ~50 (19&ndash;30K) may omit a few peers. The charts below are protocol-level / per-wallet. Internal BD reference.
 </div>
 <script>
-const ROWS=__ROWS__, D=__DATA__, AREA=__AREA__, STAKER=__STAKER__, EARN=__EARN__;
+const ROWS=__ROWS__, VROWS=__VROWS__, D=__DATA__, AREA=__AREA__, STAKER=__STAKER__, EARN=__EARN__;
 const VE=n=>(n>=1e6?(n/1e6).toFixed(2)+'M':(n/1e3).toFixed(0)+'K');
 const sc=a=>a.slice(0,6)+'…'+a.slice(-4);
 const dlt=v=>(v==null?'<span style="color:var(--muted)">—</span>':v>0?'<span style="color:var(--green)">+'+Math.round(v).toLocaleString()+'</span>':v<0?'<span style="color:var(--red)">'+Math.round(v).toLocaleString()+'</span>':'<span style="color:var(--muted)">0</span>');
@@ -189,49 +203,35 @@ if(D.has_holdings){
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--purple)">${ROWS.filter(r=>r.automated).length} automated</b> &middot; <b style="color:var(--cyan)">${ROWS.filter(r=>howMode(r)==='Manual').length} manual</b> &middot; <b style="color:var(--muted)">${ROWS.filter(r=>howMode(r)==='Never voted').length} dormant</b> <span style="color:var(--muted)">(hidden &mdash; click the chip to show)</span>`;
-let modeFilter='All';   // 'All' = everyone who votes; never-voted hidden until you click that chip
-const chips=[['Voters','All'],['Automated','Automated'],['Manual','Manual'],['Never voted','Never voted']];
-function chipCount(v){return v==='All'?ROWS.filter(r=>howMode(r)!=='Never voted').length
-   :v==='Automated'?ROWS.filter(r=>r.automated).length
-   :v==='Manual'?ROWS.filter(r=>howMode(r)==='Manual').length
-   :ROWS.filter(r=>howMode(r)==='Never voted').length;}
+document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> individual veHYDX locks (treasury #1 excluded) &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b> (Lock&nbsp;Maxi auto-compound) &middot; ${D.n_vowners} distinct owners`;
+let modeFilter='All';
+const chips=[['All','All'],['Automated','Automated'],['Manual','Manual']];
+function chipCount(v){return v==='All'?VROWS.length:v==='Automated'?VROWS.filter(r=>r.automated).length:VROWS.filter(r=>!r.automated).length;}
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl} <span style="opacity:.55">${chipCount(val)}</span></span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
 function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
- let rows=ROWS.filter(r=>( modeFilter==='All' ? howMode(r)!=='Never voted'
-     : modeFilter==='Automated' ? r.automated
-     : modeFilter==='Manual' ? howMode(r)==='Manual'
-     : howMode(r)==='Never voted' )
-   && (!q||((r.dom_pool||'')+' '+(r.automated?'automated':'manual')+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
+ let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : !r.automated )
+   && (!q||(('#'+r.account)+' '+r.owner+' '+(r.cur.map(c=>c[0]).join(' '))+' '+(r.strategy||'')).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
-  const cur = r.cur_targets||[];
-  const votesFor = r.vote_mode==='Never voted' ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
-    : cur.length===0 ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
-    : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
+  const cur=r.cur||[];
+  const votesFor = cur.length===0 ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
     : `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`;
-  const hm = howMode(r);
-  const strat = r.automated
-    ? (cur.length===0 ? `<span class="sub2">yield only (no gauge vote)</span>`
-       : cur.length===1 ? `${cur[0][0]}`
-       : `${cur[0][0]} <span class="sub2">+${cur.length-1} more</span>`)
-    : (cur.length===1 ? `${cur[0][0]}` : `<span style="color:var(--muted)">—</span>`);
+  const aut = r.automated ? `<span class="md md-Automated">${r.strategy||'Automated'}</span>` : `<span style="color:var(--muted)">—</span>`;
   return `<tr>
-  <td style="color:var(--muted)">${r.rank}</td>
-  <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>
+  <td class="n" style="color:var(--muted)">${r.rank}</td>
+  <td style="font-weight:700;color:var(--cyan)">#${r.account}</td>
+  <td><a href="https://basescan.org/address/${r.owner}" target="_blank" title="${r.owner}">${sc(r.owner)}</a></td>
   <td class="n">${VE(r.earn)}</td><td class="n">${r.earn_pct}%</td>
-  <td class="n">${dlt(r.earn_delta)}</td>
   <td>${votesFor}</td>
-  <td><span class="md ${mdClass(hm)}">${hm}</span></td>
-  <td>${strat}</td>
+  <td>${aut}</td>
  </tr>`;}).join('');
 }
 renderChips();render();
 </script></body></html>"""
-html=html.replace("__ROWS__",ROWS).replace("__DATA__",DATA).replace("__AREA__",AREA).replace("__STAKER__",STAKER).replace("__EARN__",EARN).replace("__EPOCH__",str(CUR_EPOCH)).replace("__EPRANGE__",EPOCH_RANGE)
+html=html.replace("__ROWS__",ROWS).replace("__VROWS__",VROWS).replace("__DATA__",DATA).replace("__AREA__",AREA).replace("__STAKER__",STAKER).replace("__EARN__",EARN).replace("__EPOCH__",str(CUR_EPOCH)).replace("__EPRANGE__",EPOCH_RANGE)
 open("vehydx_dashboard_plain.html","w").write(html)
 print(f"wrote vehydx_dashboard_plain.html ({len(html)} bytes) | styles: {dict(style_ct)}")

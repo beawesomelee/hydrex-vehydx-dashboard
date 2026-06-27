@@ -102,7 +102,7 @@ if R:
 print("\n== E. dashboard integrity (public, unencrypted) ==")
 try:
     idx=open("index.html").read()
-    check("index.html is the dashboard (behavior table + tiles)", "Voter Behavior" in idx and "Total Earning Power" in idx)
+    check("index.html is the dashboard (table + tiles)", "Top Accounts" in idx and "Total Earning Power" in idx)
     check("index.html serves directly (no password gate)", "Enter passphrase to decrypt" not in idx and 'id="CT"' not in idx)
     check("index.html carries the holder rows", "const ROWS=[" in idx and idx.count('"wallet"')>=90)
     check("index.html has both trend charts", "stakerChart" in idx and "totalChart" in idx)
