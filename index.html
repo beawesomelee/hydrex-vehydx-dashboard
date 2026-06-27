@@ -141,18 +141,18 @@ function render(){
     : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
     : `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`;
   const hm = howMode(r);
-  const howSub = hm==='Manual' ? `<div class="sub2">${r.vote_mode==='Set-and-forget'?'set once':'active'}</div>` : '';
-  const strat = !r.automated ? `<span style="color:var(--muted)">—</span>`
-    : cur.length===0 ? `<span class="sub2">yield only (no gauge vote)</span>`
-    : cur.length===1 ? `${cur[0][0]}`
-    : `${cur[0][0]} <span class="sub2">+${cur.length-1} more</span>`;
+  const strat = r.automated
+    ? (cur.length===0 ? `<span class="sub2">yield only (no gauge vote)</span>`
+       : cur.length===1 ? `${cur[0][0]}`
+       : `${cur[0][0]} <span class="sub2">+${cur.length-1} more</span>`)
+    : (cur.length===1 ? `${cur[0][0]}` : `<span style="color:var(--muted)">—</span>`);
   return `<tr>
   <td style="color:var(--muted)">${r.rank}</td>
   <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>
   <td class="n">${VE(r.earn)}</td><td class="n">${r.earn_pct}%</td>
   <td class="n">${dlt(r.earn_delta)}</td>
   <td>${votesFor}</td>
-  <td><span class="md ${mdClass(hm)}">${hm}</span>${howSub}</td>
+  <td><span class="md ${mdClass(hm)}">${hm}</span></td>
   <td>${strat}</td>
  </tr>`;}).join('');
 }
