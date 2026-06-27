@@ -32,13 +32,16 @@ for r in R:
 # Per-veNFT table rows (top 500 individual locks; treasury genesis lock #1 excluded like before).
 try:
     _TOPV=json.load(open("top500_venfts.json")); _BEHV={k.lower():v for k,v in json.load(open("venft_owner_behavior.json")).items()}
+    try: _CONS={k.lower():v for k,v in json.load(open("venft_consistency.json")).items()}
+    except FileNotFoundError: _CONS={}
     _vr=[]
     for x in _TOPV:
         if int(x["tokenId"])==1: continue   # treasury genesis lock — excluded
-        o=x["owner"].lower(); b=_BEHV.get(o,{}); earn=round(x["power"]/1e18*EARN_FACTOR)
+        o=x["owner"].lower(); b=_BEHV.get(o,{}); cn=_CONS.get(o,{}); earn=round(x["power"]/1e18*EARN_FACTOR)
         _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
             "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
-            "cur":b.get("cur_targets") or [],"automated":bool(b.get("automated")),"strategy":b.get("strategy")})
+            "style":cn.get("style","—"),"dom_pool":cn.get("dom_pool"),"top_pools":cn.get("top_pools") or [],
+            "automated":bool(b.get("automated")),"strategy":b.get("strategy")})
     for i,r in enumerate(_vr,1): r["rank"]=i
     HAS_VENFT=bool(_vr)
 except FileNotFoundError:
@@ -165,7 +168,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
-<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. <b>Votes for</b> = the pool(s) the lock's <i>owner</i> currently votes &mdash; one owner casts one vote across all their locks. <b>Automation</b> = the owner uses a Hydrex Account-Automation conduit (<span class="md md-Automated">Lock Maxi</span> auto-compounds the lock into more veHYDX; it does <i>not</i> change the vote).<br>
+<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. <b>Votes for</b> = the owner's voting <i>pattern over the last 10 epochs</i>: a <b>pool name</b> = they back it consistently (same pool, or a stable 1-3 set) &middot; <span class="brd">fee-max</span> = they switch pools epoch to epoch / spray many (mercenary) &middot; <i>did not vote</i> = no vote in 10 epochs. <b>Automation</b> = owner uses a Hydrex conduit (<span class="md md-Automated">Lock Maxi</span> auto-compounds; doesn't change the vote — only Lock Maxi is detectable on-chain so far).<br>
 Top 500 of ~846 active locks; locks &ge;30K veHYDX are complete, the bottom ~50 (19&ndash;30K) may omit a few peers. The charts below are protocol-level / per-wallet. Internal BD reference.
 </div>
 <script>
@@ -203,25 +206,26 @@ if(D.has_holdings){
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · <a href="https://basescan.org/address/${r.wallet}" target="_blank">${sc(r.wallet)}</a></span></div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> individual veHYDX locks (treasury #1 excluded) &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b> (Lock&nbsp;Maxi auto-compound) &middot; ${D.n_vowners} distinct owners`;
+document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> locks (treasury #1 excluded), by 10-epoch voting pattern &middot; <b style="color:var(--green)">${VROWS.filter(r=>r.style==='Same pool').length} same pool</b> &middot; <b style="color:var(--cyan)">${VROWS.filter(r=>r.style==='1-3 pools').length} 1-3 pools</b> &middot; <b style="color:var(--orange)">${VROWS.filter(r=>r.style==='Fee-max').length} fee-max</b> &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b>`;
 let modeFilter='All';
-const chips=[['All','All'],['Automated','Automated'],['Manual','Manual']];
-function chipCount(v){return v==='All'?VROWS.length:v==='Automated'?VROWS.filter(r=>r.automated).length:VROWS.filter(r=>!r.automated).length;}
+const chips=[['All','All'],['Same pool','Same pool'],['1-3 pools','1-3 pools'],['Fee-max','Fee-max'],['Automated','Automated']];
+function chipCount(v){return v==='All'?VROWS.length:v==='Automated'?VROWS.filter(r=>r.automated).length:VROWS.filter(r=>r.style===v).length;}
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl} <span style="opacity:.55">${chipCount(val)}</span></span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
 function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
- let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : !r.automated )
-   && (!q||(('#'+r.account)+' '+r.owner+' '+(r.cur.map(c=>c[0]).join(' '))+' '+(r.strategy||'')).toLowerCase().includes(q)));
+ let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : r.style===modeFilter )
+   && (!q||(('#'+r.account)+' '+r.owner+' '+(r.top_pools||[]).join(' ')+' '+(r.style||'')+' '+(r.strategy||'')).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
-  const cur=r.cur||[]; const csum=cur.reduce((a,c)=>a+(c[1]||0),0);
-  // show the dominant (consistent) pool; for spreaders the long-tail is noisy/inconsistent, so flag it
-  const votesFor = cur.length===0 ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
-    : csum>=80 ? `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`
-    : `<span class="brd">${cur[0][0]}</span><div class="sub2">+ spreads across more</div>`;
+  // consistency across the last 10 epochs: same pool / 1-3 pools / fee-max (switches)
+  const tp=r.top_pools||[];
+  const votesFor = r.style==='Same pool' ? `<span class="brd">${r.dom_pool}</span>`
+    : r.style==='1-3 pools' ? `<span class="brd">${tp[0]||r.dom_pool}</span>${tp.length>1?`<div class="sub2">${tp.slice(1).join(', ')}</div>`:''}`
+    : r.style==='Fee-max' ? `<span class="brd">fee-max</span><div class="sub2">switches pools</div>`
+    : `<span class="brd" style="color:var(--muted)">did not vote</span>`;
   const aut = r.automated ? `<span class="md md-Automated">${r.strategy||'Automated'}</span>` : `<span style="color:var(--muted)">—</span>`;
   return `<tr>
   <td class="n" style="color:var(--muted)">${r.rank}</td>
