@@ -67,14 +67,14 @@ if R:
     check("voting styles cover all 100", sum(sc.values())==100, dict(sc))
     check("Idle <=> epochs_voted==0",
           all((r["voting_style"]=="Idle")==(r["epochs_voted"]==0) for r in R))
-    bad_loyal=[r["rank"] for r in R if r["voting_style"]=="Anchored" and (r["avg_pools_per_epoch"]>3 or r["dom_share"]<0.7)]
+    bad_loyal=[r["rank"] for r in R if r["voting_style"]=="Anchored" and (r["avg_pools_per_epoch"]>3 or r["dom_share"]<0.8)]
     check("every Anchored really is concentrated (<=3 pools/ep & dom>=70%)", not bad_loyal,
           f"ranks violating: {bad_loyal} (the 9.7-pools 'Anchored' bug)")
     # re-derive style from stored metrics and assert it matches (catches synth/output drift)
     def restyle(r):
         if r["epochs_voted"]==0 or not r["dom_pool"]: return "Idle"
         n=r["avg_pools_per_epoch"]; ds=r["dom_share"]; dp=r["distinct_pools"]
-        if n<=3 and ds>=0.7: s="Anchored"
+        if n<=3 and ds>=0.8: s="Anchored"
         elif n<=6 and (ds>=0.5 or dp<=3): s="Focused"
         else: s="Fee Focus"
         if s=="Fee Focus" and r["epochs_voted"]<3: s="Occasional"  # too few votes to call mercenary
@@ -104,6 +104,10 @@ try:
     check("index.html serves directly (no password gate)", "Enter passphrase to decrypt" not in idx and 'id="CT"' not in idx)
     check("index.html carries the holder rows", "const ROWS=[" in idx and idx.count('"wallet"')>=90)
     check("index.html has both trend charts", "stakerChart" in idx and "totalChart" in idx)
+    # public page must NOT embed the internal attribution dossier (page is public)
+    SENSITIVE=['"likely_who"','"safe_owners"','"treasury_signer_match"','"confidence"','"entity_type"','"behavior_10ep"','"codehash"','"cur_targets"']
+    leaked=[s.strip('"') for s in SENSITIVE if s in idx]
+    check("public index.html does NOT leak attribution/dossier fields", not leaked, f"LEAKED: {leaked}")
 except FileNotFoundError as e:
     check("dashboard files present", False, str(e))
 # git: ensure raw intermediate data files (csv/json) are never committed

@@ -3,7 +3,16 @@ from collections import Counter
 EP39_START=1781136000; EPLEN=604800   # epoch 39 start = 2026-06-11 00:00 UTC; 1 epoch = 1 week
 def _eplab(K): return _dt.datetime.utcfromtimestamp(EP39_START+(K-38)*EPLEN).strftime("%b %-d")  # epoch END date (matches frontend axis)
 R=json.load(open("vehydx_top100_labeled.json"))
-TOTAL=454586648.0; HOLDERS=3780; TREASURY_PCT=61.65
+# Headline constants are DERIVED from the data so they auto-update on each weekly refresh
+# (previously hardcoded, which silently went stale). owner_power.json is the same snapshot the
+# leaderboard rows come from, so TOTAL/TREASURY_PCT stay self-consistent with the table.
+_op=json.load(open("owner_power.json"))["owner_power"]
+TOTAL=sum(float(v) for v in _op.values())/1e18
+_TREAS="0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af"
+_tp=float(_op.get(_TREAS) or _op.get(_TREAS.upper()) or 0)/1e18
+TREASURY_PCT=_tp/TOTAL*100
+try: HOLDERS=json.load(open("staker_history.json"))["stakers"][-1]   # = the stakers-chart endpoint, so tile==chart
+except Exception: HOLDERS=len(_op)
 # Earning power (Hydrex API, = frontend's headline). Treasury votes a sink gauge so it earns
 # nothing; everyone else's lock is boosted ~1.30x. Per-wallet earning power is dominated by
 # voting-power x base boost (the AnchorClub/options/Flex pieces that vary per lock are <1% of
@@ -12,7 +21,7 @@ try:
     _EPH=json.load(open("earning_power_history.json"))
     EARN_TOTAL=_EPH["latest_earning_power"]; HAS_EARN=bool(_EPH.get("epochs"))
     EARN_SERIES={"epochs":[_eplab(e) for e in _EPH["epochs"]],"power":_EPH["earning_power_m"]}
-except FileNotFoundError:
+except (FileNotFoundError, KeyError, ValueError, json.JSONDecodeError):
     EARN_TOTAL=TOTAL; HAS_EARN=False; EARN_SERIES={"epochs":[],"power":[]}
 NONTREAS_VOTE=TOTAL*(1-TREASURY_PCT/100)
 EARN_FACTOR=EARN_TOTAL/NONTREAS_VOTE if NONTREAS_VOTE else 1.0
@@ -32,7 +41,11 @@ mode_ct=Counter(r.get("vote_mode","—") for r in R)
 for r in R:
     r["cur"]=", ".join(f"{x} {pc}%" for x,pc in r.get("cur_targets",[])) or "—"
 
-ROWS=json.dumps(R)
+# PUBLIC PROJECTION: the page is public, so ship ONLY the fields the UI renders. Never embed the
+# internal attribution dossier (likely_who, safe_owners, confidence, entity_type, codehash,
+# treasury_signer_match, behavior_10ep, cur_targets, ...) — those stay in R for build-time aggregates only.
+_PUB=["rank","wallet","vehydx","earn","earn_pct","earn_delta","dom_pool","voting_style","vote_mode","last_vote","cur","holdings"]
+ROWS=json.dumps([{k:r.get(k) for k in _PUB} for r in R])
 TYPE=json.dumps([[k,round(v/1e6,2)] for k,v in sorted(by_type.items(),key=lambda x:-x[1])])
 # stacked-area: top-12 holders' holdings over epochs + "Other (top 100)"
 EPN=sorted({int(e) for r in R for e in r.get("holdings",{})})
@@ -153,20 +166,19 @@ const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 // breadth (what they vote for) display from voting_style
 const brd={Anchored:'one pool',Focused:'1-3 pools','Fee Focus':'fee-max',Occasional:'occasional',Idle:'—'};
 document.getElementById('cards').innerHTML=[
- ['Total Earning Power',VE(D.earning_total),'effective earning power (excl. non-voting treasury)'],
+ ['Total Earning Power',D.has_earn?VE(D.earning_total):'—','effective earning power (excl. non-voting treasury)'],
  ['Accounts',D.holders.toLocaleString(),'veHYDX holders'],
  ['Current Epoch','Epoch '+D.epoch,D.epoch_range],
 ].map(c=>`<div class="card"><div class="cl">${c[0]}</div><div class="cv">${c[1]}</div><div class="cs">${c[2]}</div></div>`).join('');
-if(D.has_staker){
- new Chart(document.getElementById('stakerChart'),{type:'line',data:{labels:STAKER.epochs,
+if(D.has_staker){new Chart(document.getElementById('stakerChart'),{type:'line',data:{labels:STAKER.epochs,
    datasets:[{label:'Stakers',data:STAKER.stakers,borderColor:'#58a6ff',backgroundColor:'#58a6ff22',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toLocaleString()+' stakers'}}},
-     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:6,autoSkip:true},grid:{color:'#30363d'}},y:{beginAtZero:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}}}}});
- if(D.has_earn){new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:EARN.epochs,
+     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:6,autoSkip:true},grid:{color:'#30363d'}},y:{beginAtZero:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}}}}});}
+if(D.has_earn){new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:EARN.epochs,
    datasets:[{label:'Earning power',data:EARN.power,borderColor:'#5cc8f5',backgroundColor:'#5cc8f51f',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+'M earning power'}}},
      scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:6,autoSkip:true},grid:{color:'#30363d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});}
-}else{document.getElementById('trends').style.display='none';}
+if(!D.has_staker&&!D.has_earn){document.getElementById('trends').style.display='none';}
 if(D.has_holdings){
  const pal=['#bc8cff','#ff7b72','#58a6ff','#3fb950','#d29922','#39d4cf','#ff7b9d','#a5d6ff','#f85149','#ffa657','#7ce38b','#d2a8ff'];
  new Chart(document.getElementById('area'),{type:'line',data:{labels:AREA.epochs,
@@ -189,7 +201,8 @@ function render(){
  let rows=ROWS.filter(r=>(modeFilter==='All'||r.vote_mode===modeFilter) && (!q||((r.dom_pool||'')+' '+r.vote_mode+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
-  const votesFor = !r.dom_pool ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
+  const votesFor = r.vote_mode==='Never voted' ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
+    : !r.dom_pool ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
     : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
     : `<span class="brd">${brd[r.voting_style]||'—'}</span><div class="sub2">${r.dom_pool}</div>`;
   const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>` : '';

@@ -61,7 +61,7 @@ def vote_profile(w):
     dom_pool,dom=Counter(tops).most_common(1)[0]
     dom_share=dom/len(tops); distinct=len(set(tops)); avg_n=sum(ns)/len(ns)
     # style needs BOTH within-epoch concentration (avg pools/epoch) AND cross-epoch consistency
-    if avg_n<=3 and dom_share>=0.7: style="Anchored"          # ~one pool, same one each epoch
+    if avg_n<=3 and dom_share>=0.8: style="Anchored"          # ~one pool, same one >=80% of epochs (matches legend)
     elif avg_n<=6 and (dom_share>=0.5 or distinct<=3): style="Focused"  # a few pools, clear lean
     else: style="Fee Focus"                                 # sprays 4+/epoch or rotates -> mercenary
     return {"epochs_voted":len(active),"epochs_total":total,"voting_style":style,
