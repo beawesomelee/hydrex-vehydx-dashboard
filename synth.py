@@ -112,9 +112,6 @@ for f in F:
         who="Hydrex managed-lock (unverified)"; et="managed_lock"; conf="low"
     # --- fix entity contradiction: a PartnerEscrow contract is not an "individual" ---
     if "partnerescrow" in who.lower() and et=="individual_whale": et="partner_project"
-    # --- thin data: <3 voted epochs can't be called a mercenary spray; soften ---
-    if prof["voting_style"]=="Fee Focus" and prof["epochs_voted"]<3:
-        prof["voting_style"]="Occasional"
     rows.append({**f,"likely_who":who,"entity_type":et,"confidence":conf,"behavior_10ep":beh,**prof})
 
 rows.sort(key=lambda r:r["rank"])

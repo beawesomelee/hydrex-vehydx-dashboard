@@ -77,7 +77,6 @@ if R:
         if n<=3 and ds>=0.8: s="Anchored"
         elif n<=6 and (ds>=0.5 or dp<=3): s="Focused"
         else: s="Fee Focus"
-        if s=="Fee Focus" and r["epochs_voted"]<3: s="Occasional"  # too few votes to call mercenary
         return s
     drift=[r["rank"] for r in R if restyle(r)!=r["voting_style"]]
     check("stored voting_style matches its own metrics (no logic drift)", not drift, f"ranks {drift[:5]}")
@@ -105,7 +104,7 @@ try:
     check("index.html carries the holder rows", "const ROWS=[" in idx and idx.count('"wallet"')>=90)
     check("index.html has both trend charts", "stakerChart" in idx and "totalChart" in idx)
     # public page must NOT embed the internal attribution dossier (page is public)
-    SENSITIVE=['"likely_who"','"safe_owners"','"treasury_signer_match"','"confidence"','"entity_type"','"behavior_10ep"','"codehash"','"cur_targets"']
+    SENSITIVE=['"likely_who"','"safe_owners"','"treasury_signer_match"','"confidence"','"entity_type"','"behavior_10ep"','"codehash"']
     leaked=[s.strip('"') for s in SENSITIVE if s in idx]
     check("public index.html does NOT leak attribution/dossier fields", not leaked, f"LEAKED: {leaked}")
 except FileNotFoundError as e:

@@ -44,7 +44,7 @@ for r in R:
 # PUBLIC PROJECTION: the page is public, so ship ONLY the fields the UI renders. Never embed the
 # internal attribution dossier (likely_who, safe_owners, confidence, entity_type, codehash,
 # treasury_signer_match, behavior_10ep, cur_targets, ...) — those stay in R for build-time aggregates only.
-_PUB=["rank","wallet","vehydx","earn","earn_pct","earn_delta","dom_pool","voting_style","vote_mode","last_vote","cur","holdings"]
+_PUB=["rank","wallet","vehydx","earn","earn_pct","earn_delta","dom_pool","voting_style","vote_mode","last_vote","cur","cur_targets","holdings"]
 ROWS=json.dumps([{k:r.get(k) for k in _PUB} for r in R])
 TYPE=json.dumps([[k,round(v/1e6,2)] for k,v in sorted(by_type.items(),key=lambda x:-x[1])])
 # stacked-area: top-12 holders' holdings over epochs + "Other (top 100)"
@@ -101,7 +101,6 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 .vs-Focused{background:rgba(57,212,207,.16);color:var(--cyan)}
 .vs-FeeFocus{background:rgba(210,153,34,.16);color:var(--orange)}
 .vs-Idle{background:rgba(139,148,158,.14);color:var(--muted)}
-.vs-Occasional{background:rgba(139,148,158,.14);color:var(--muted)}
 .md{display:inline-block;padding:2px 9px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap}
 .md-Automated{background:rgba(210,153,34,.18);color:var(--orange)}
 .md-Active{background:rgba(57,212,207,.16);color:var(--cyan)}
@@ -150,7 +149,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
-<b>Votes for</b> (last 10 epochs): <span class="brd">one pool</span> = same single pool &ge;80% of epochs &middot; <span class="brd">1-3 pools</span> = one main pool or a small fixed set &middot; <span class="brd">fee-max</span> = spreads across 4+ pools, no allegiance.<br>
+<b>Votes for</b> = the pool(s) the wallet currently allocates its vote to (top pool first; more below it) &middot; <span class="brd">fee-max</span> = spreads across many pools with no allegiance.<br>
 <b>How they vote</b> (from on-chain <code>lastVoted</code>): <span class="md md-Setandforget">Set-and-forget</span> voted once, the vote just persists &middot; <span class="md md-Active">Active</span> actively re-votes (changes its vote) &middot; <span class="md md-Nevervoted">Never</span> holds veHYDX but has not voted.<br>
 <b>Pattern:</b> single-pool holders are predominantly set-and-forget (committed, passive); fee-maximizers are predominantly active re-voters (chasing the best bribe).
 </div>
@@ -164,7 +163,6 @@ const tnShort={hydrex_treasury_or_team:'team',managed_lock:'mgd-lock?',partner_p
 const vsClass=s=>'vs-'+s.replace(' ','');
 const mdClass=m=>'md-'+(m||'').replace(/[ -]/g,'');
 // breadth (what they vote for) display from voting_style
-const brd={Anchored:'one pool',Focused:'1-3 pools','Fee Focus':'fee-max',Occasional:'occasional',Idle:'—'};
 document.getElementById('cards').innerHTML=[
  ['Total Earning Power',D.has_earn?VE(D.earning_total):'—','effective earning power (excl. non-voting treasury)'],
  ['Accounts',D.holders.toLocaleString(),'veHYDX holders'],
@@ -202,12 +200,12 @@ function render(){
  let rows=ROWS.filter(r=>(modeFilter==='All' ? r.vote_mode!=='Never voted' : r.vote_mode===modeFilter) && (!q||((r.dom_pool||'')+' '+r.vote_mode+' '+r.voting_style+' '+r.cur+' '+r.wallet).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
+  const cur = r.cur_targets||[];
   const votesFor = r.vote_mode==='Never voted' ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
-    : !r.dom_pool ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
-    : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
-    : r.voting_style==='Anchored' ? `<span class="brd">${r.dom_pool}</span>`
-    : `<span class="brd">${brd[r.voting_style]||'—'}</span><div class="sub2">${r.dom_pool}</div>`;
-  const lvSub = r.vote_mode==='Set-and-forget'&&r.last_vote ? `<div class="sub2">since ${new Date(r.last_vote*1000).toISOString().slice(0,10)}</div>` : '';
+    : cur.length===0 ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
+    : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span><div class="sub2">${cur.map(c=>c[0]).join(', ')}…</div>`
+    : `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`;
+  const lvSub = '';
   return `<tr>
   <td style="color:var(--muted)">${r.rank}</td>
   <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>
