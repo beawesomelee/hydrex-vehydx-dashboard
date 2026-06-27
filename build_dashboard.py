@@ -2,6 +2,22 @@ import json, re
 from collections import Counter
 R=json.load(open("vehydx_top100_labeled.json"))
 TOTAL=454586648.0; HOLDERS=3780; TREASURY_PCT=61.65
+# Earning power (Hydrex API, = frontend's headline). Treasury votes a sink gauge so it earns
+# nothing; everyone else's lock is boosted ~1.30x. Per-wallet earning power is dominated by
+# voting-power x base boost (the AnchorClub/options/Flex pieces that vary per lock are <1% of
+# total), so scale each non-treasury wallet's voting power by earning_total / non-treasury-voting.
+try:
+    _EPH=json.load(open("earning_power_history.json"))
+    EARN_TOTAL=_EPH["latest_earning_power"]; HAS_EARN=bool(_EPH.get("epochs"))
+    EARN_SERIES={"epochs":[f"ep{e}" for e in _EPH["epochs"]],"power":_EPH["earning_power_m"]}
+except FileNotFoundError:
+    EARN_TOTAL=TOTAL; HAS_EARN=False; EARN_SERIES={"epochs":[],"power":[]}
+NONTREAS_VOTE=TOTAL*(1-TREASURY_PCT/100)
+EARN_FACTOR=EARN_TOTAL/NONTREAS_VOTE if NONTREAS_VOTE else 1.0
+for r in R:
+    r["earn"]=round(r["vehydx"]*EARN_FACTOR)
+    r["earn_pct"]=round(r["earn"]/EARN_TOTAL*100,3) if EARN_TOTAL else 0
+    r["earn_delta"]=round(r["delta_last"]*EARN_FACTOR) if r.get("delta_last") is not None else None
 team=sum(r["vehydx"] for r in R if r["entity_type"]=="hydrex_treasury_or_team")
 managed=sum(r["vehydx"] for r in R if r["entity_type"]=="managed_lock")
 hydrex_ctrl = TREASURY_PCT + team/TOTAL*100          # verified Hydrex only (treasury + signer team)
@@ -31,13 +47,7 @@ try:
     HAS_STAKER=bool(SH.get("epochs"))
 except FileNotFoundError:
     STAKER=json.dumps({"epochs":[],"stakers":[],"total":[]}); HAS_STAKER=False
-# Total earning power per epoch from the Hydrex API (frontend's headline number)
-try:
-    EP=json.load(open("earning_power_history.json"))
-    EARN=json.dumps({"epochs":[f"ep{e}" for e in EP["epochs"]],"power":EP["earning_power_m"]})
-    EARN_TOTAL=EP["latest_earning_power"]; HAS_EARN=bool(EP.get("epochs"))
-except FileNotFoundError:
-    EARN=json.dumps({"epochs":[],"power":[]}); EARN_TOTAL=TOTAL; HAS_EARN=False
+EARN=json.dumps(EARN_SERIES)   # total earning-power-over-time series for the chart
 # Current epoch derived from the data (max epoch present) so it auto-updates each refresh.
 import datetime as _dt
 EP39_START=1781136000; EPLEN=604800   # Hydrex epoch 39 start = 2026-06-11 00:00 UTC; 1 epoch = 1 week
@@ -112,13 +122,13 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
   <div class="tablewrap"><table id="t"><thead><tr>
     <th onclick="sort('rank')">#</th>
     <th>Wallet</th>
-    <th class="n" onclick="sort('vehydx')">veHYDX</th>
-    <th class="n" onclick="sort('pct')">%</th>
-    <th class="n" onclick="sort('delta_last')">&Delta; epoch</th>
+    <th class="n" onclick="sort('earn')">Earning power</th>
+    <th class="n" onclick="sort('earn_pct')">%</th>
+    <th class="n" onclick="sort('earn_delta')">&Delta; epoch</th>
     <th onclick="sort('voting_style')">Votes for</th>
     <th onclick="sort('vote_mode')">How they vote</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
-  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder, the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), <b>280.3M</b> is excluded because it <b>does not vote on any active pool</b>. &Delta; epoch = change in veHYDX vs the previous epoch.</div>
+  <div class="sub2" style="margin-top:10px">* Leaderboard starts at #2. The #1 holder, the <b>Hydrex Treasury Safe</b> (<a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>), is excluded because it <b>does not vote on any active pool</b>, so it earns nothing. Earning power = veHYDX voting power boosted ~1.3&times; (matches the Hydrex frontend); &Delta; epoch = change vs the previous epoch.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">each line = one holder's veHYDX balance (not votes) &middot; top 12 + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2" id="trends">
@@ -166,7 +176,7 @@ if(D.has_holdings){
      scales:{x:{stacked:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}},y:{stacked:true,ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
-document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.vehydx)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
+document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · ${r.vote_mode.toLowerCase()}</span></div>`).join('')||'—';
 document.getElementById('styleline').innerHTML=`each wallet by <b>what they vote for</b> &times; <b>how they vote</b> &middot; <b style="color:var(--cyan)">${D.modes.Active||0} active</b> &middot; <b style="color:var(--green)">${D.modes['Set-and-forget']||0} set-and-forget</b> &middot; <b style="color:var(--muted)">${D.modes['Never voted']||0} never</b>`;
 let modeFilter='All';
 const chips=[['All','All'],['Active','Active'],['Set-and-forget','Set-and-forget'],['Never voted','Never voted']];
@@ -186,8 +196,8 @@ function render(){
   return `<tr>
   <td style="color:var(--muted)">${r.rank}</td>
   <td><a href="https://basescan.org/address/${r.wallet}" target="_blank" title="${r.wallet}">${sc(r.wallet)}</a></td>
-  <td class="n">${VE(r.vehydx)}</td><td class="n">${r.pct}%</td>
-  <td class="n">${dlt(r.delta_last)}</td>
+  <td class="n">${VE(r.earn)}</td><td class="n">${r.earn_pct}%</td>
+  <td class="n">${dlt(r.earn_delta)}</td>
   <td>${votesFor}</td>
   <td><span class="md ${mdClass(r.vote_mode)}">${r.vote_mode}</span>${lvSub}</td>
  </tr>`;}).join('');
