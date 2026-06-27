@@ -203,7 +203,7 @@ function render(){
   const cur = r.cur_targets||[];
   const votesFor = r.vote_mode==='Never voted' ? `<span class="brd" style="color:var(--muted)">does not vote</span>`
     : cur.length===0 ? `<span class="brd" style="color:var(--muted)">no active vote</span>`
-    : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span><div class="sub2">${cur.map(c=>c[0]).join(', ')}…</div>`
+    : r.voting_style==='Fee Focus' ? `<span class="brd">fee-max</span>`
     : `<span class="brd">${cur[0][0]}</span>${cur.length>1?`<div class="sub2">${cur.slice(1).map(c=>c[0]).join(', ')}</div>`:''}`;
   const lvSub = '';
   return `<tr>
