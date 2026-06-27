@@ -1,5 +1,7 @@
-import json, re
+import json, re, datetime as _dt
 from collections import Counter
+EP39_START=1781136000; EPLEN=604800   # epoch 39 start = 2026-06-11 00:00 UTC; 1 epoch = 1 week
+def _eplab(K): return _dt.datetime.utcfromtimestamp(EP39_START+(K-38)*EPLEN).strftime("%b %-d")  # epoch END date (matches frontend axis)
 R=json.load(open("vehydx_top100_labeled.json"))
 TOTAL=454586648.0; HOLDERS=3780; TREASURY_PCT=61.65
 # Earning power (Hydrex API, = frontend's headline). Treasury votes a sink gauge so it earns
@@ -9,7 +11,7 @@ TOTAL=454586648.0; HOLDERS=3780; TREASURY_PCT=61.65
 try:
     _EPH=json.load(open("earning_power_history.json"))
     EARN_TOTAL=_EPH["latest_earning_power"]; HAS_EARN=bool(_EPH.get("epochs"))
-    EARN_SERIES={"epochs":[f"ep{e}" for e in _EPH["epochs"]],"power":_EPH["earning_power_m"]}
+    EARN_SERIES={"epochs":[_eplab(e) for e in _EPH["epochs"]],"power":_EPH["earning_power_m"]}
 except FileNotFoundError:
     EARN_TOTAL=TOTAL; HAS_EARN=False; EARN_SERIES={"epochs":[],"power":[]}
 NONTREAS_VOTE=TOTAL*(1-TREASURY_PCT/100)
@@ -43,14 +45,12 @@ AREA=json.dumps({"epochs":[f"ep{e}" for e in EPN],"series":area})
 # Staker count + total veHYDX over the protocol's full history (Dune-style growth)
 try:
     SH=json.load(open("staker_history.json"))
-    STAKER=json.dumps({"epochs":[f"ep{e}" for e in SH["epochs"]],"stakers":SH["stakers"],"total":SH["total_vehydx_m"]})
+    STAKER=json.dumps({"epochs":[_eplab(e) for e in SH["epochs"]],"stakers":SH["stakers"],"total":SH["total_vehydx_m"]})
     HAS_STAKER=bool(SH.get("epochs"))
 except FileNotFoundError:
     STAKER=json.dumps({"epochs":[],"stakers":[],"total":[]}); HAS_STAKER=False
 EARN=json.dumps(EARN_SERIES)   # total earning-power-over-time series for the chart
 # Current epoch derived from the data (max epoch present) so it auto-updates each refresh.
-import datetime as _dt
-EP39_START=1781136000; EPLEN=604800   # Hydrex epoch 39 start = 2026-06-11 00:00 UTC; 1 epoch = 1 week
 CUR_EPOCH=max(EPN) if EPN else 40
 _s=EP39_START+(CUR_EPOCH-39)*EPLEN
 EPOCH_RANGE=_dt.datetime.utcfromtimestamp(_s).strftime("%b %-d")+" – "+_dt.datetime.utcfromtimestamp(_s+EPLEN).strftime("%b %-d, %Y")
@@ -161,11 +161,11 @@ if(D.has_staker){
  new Chart(document.getElementById('stakerChart'),{type:'line',data:{labels:STAKER.epochs,
    datasets:[{label:'Stakers',data:STAKER.stakers,borderColor:'#58a6ff',backgroundColor:'#58a6ff22',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y.toLocaleString()+' stakers'}}},
-     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12},grid:{color:'#30363d'}},y:{beginAtZero:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}}}}});
+     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:6,autoSkip:true},grid:{color:'#30363d'}},y:{beginAtZero:true,ticks:{color:'#8b949e',font:{size:10}},grid:{color:'#30363d'}}}}});
  if(D.has_earn){new Chart(document.getElementById('totalChart'),{type:'line',data:{labels:EARN.epochs,
-   datasets:[{label:'Earning power',data:EARN.power,borderColor:'#3fb950',backgroundColor:'#3fb95022',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
+   datasets:[{label:'Earning power',data:EARN.power,borderColor:'#5cc8f5',backgroundColor:'#5cc8f51f',fill:true,tension:0.3,pointRadius:0,borderWidth:2}]},
    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>c.parsed.y+'M earning power'}}},
-     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:12},grid:{color:'#30363d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});}
+     scales:{x:{ticks:{color:'#8b949e',font:{size:10},maxTicksLimit:6,autoSkip:true},grid:{color:'#30363d'}},y:{ticks:{color:'#8b949e',font:{size:10},callback:v=>v+'M'},grid:{color:'#30363d'}}}}});}
 }else{document.getElementById('trends').style.display='none';}
 if(D.has_holdings){
  const pal=['#bc8cff','#ff7b72','#58a6ff','#3fb950','#d29922','#39d4cf','#ff7b9d','#a5d6ff','#f85149','#ffa657','#7ce38b','#d2a8ff'];
