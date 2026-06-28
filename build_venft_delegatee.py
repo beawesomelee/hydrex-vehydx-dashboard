@@ -117,7 +117,7 @@ def classify(d):
     elif avg<=3.5 and dom_share>=0.5 and distinct<=5: style="1-3 pools"
     else: style="Fee-max"
     stable=[p for p,c in pep.most_common() if nep>=3 and c>=0.8*nep][:4]   # pools voted in >=80% of epochs
-    return {"style":style,"dom_pool":dom,"top_pools":[p for p,_ in cnt.most_common(3)],"stable_pools":stable}
+    return {"style":style,"dom_pool":dom,"top_pools":[p for p,_ in cnt.most_common(3)],"stable_pools":stable,"avg_pools":round(avg,1)}
 voters={}
 for w in extra:
     c=classify(ep_pools[w]); c["is_conduit"]=w in CADDR; c["conduit_name"]=CADDR[w]["name"] if w in CADDR else None

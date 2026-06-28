@@ -44,16 +44,19 @@ try:
         dl=_DLOCK.get(str(x["tokenId"]),{}); kind=dl.get("kind","manual"); voter=(dl.get("voter") or o).lower()
         # the lock is voted by its delegatee: a conduit / a personal delegate / the owner (manual)
         if kind in ("conduit","delegated"):
-            vc=_DVOTER.get(voter,{}); style=vc.get("style","—"); dom=vc.get("dom_pool"); tp=vc.get("top_pools") or []; sp=vc.get("stable_pools") or []; lve=None
+            vc=_DVOTER.get(voter,{}); style=vc.get("style","—"); dom=vc.get("dom_pool"); tp=vc.get("top_pools") or []; sp=vc.get("stable_pools") or []; avgp=vc.get("avg_pools") or 0; lve=None
         else:
-            style=cn.get("style","—"); dom=cn.get("dom_pool"); tp=cn.get("top_pools") or []; sp=cn.get("stable_pools") or []; lve=cn.get("last_voted_ep")
+            style=cn.get("style","—"); dom=cn.get("dom_pool"); tp=cn.get("top_pools") or []; sp=cn.get("stable_pools") or []; avgp=cn.get("avg_pools") or 0; lve=cn.get("last_voted_ep")
+        # only surface a fee-maxer's "always" pools when they're the BULK of the vote (a real basket),
+        # not a lone anchor amid a big spray — a single anchor on a 19-pool sprayer isn't a backing.
+        core = sp if (len(sp)>=2 and avgp and len(sp)/avgp>=0.5) else []
         autlabel = dl.get("conduit_name") if kind=="conduit" else ("Delegated" if kind=="delegated" else "Manual")
         # bucket = how the lock's vote is *chosen*: an automation strategy picks for conduit locks,
         # so they don't get a pool-pattern bucket; only human-voted (manual/delegated) locks do.
         bucket = "Automated" if kind=="conduit" else style
         _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
             "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
-            "style":style,"bucket":bucket,"dom_pool":dom,"top_pools":tp,"stable_pools":sp,"last_voted_ep":lve,
+            "style":style,"bucket":bucket,"dom_pool":dom,"top_pools":tp,"stable_pools":core,"last_voted_ep":lve,
             "kind":kind,"automated":kind=="conduit","strategy":autlabel})
     for i,r in enumerate(_vr,1): r["rank"]=i
     HAS_VENFT=bool(_vr)
