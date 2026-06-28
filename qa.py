@@ -154,6 +154,27 @@ if CONS is not None and BEH is not None:
         check("idle share is plausible (not a silent-RPC idle wall, <60% of owners)",
               share<0.60, f"{share*100:.0f}% of owners read idle")
 
+print("\n== H. per-lock delegatee / automation (getLockDelegatee) ==")
+DEL=load("venft_delegatee.json")
+if DEL is not None:
+    dl=DEL.get("locks",{}); dv={k.lower():v for k,v in DEL.get("voters",{}).items()}
+    KINDS={"conduit","manual","delegated","none"}
+    bad_kind=[t for t,v in dl.items() if v.get("kind") not in KINDS]
+    check("every lock has a valid delegatee kind", not bad_kind, f"{bad_kind[:3]}")
+    conduit_locks=[v for v in dl.values() if v.get("kind")=="conduit"]
+    check("conduit locks carry a strategy name", all(v.get("conduit_name") for v in conduit_locks),
+          "some conduit lock missing conduit_name")
+    strategies={v["conduit_name"] for v in conduit_locks}
+    # the whole point of getLockDelegatee: detect MORE than just Lock Maxi
+    check("per-lock detection finds multiple strategies (not Lock-Maxi-only)", len(strategies)>=3,
+          f"only found {strategies}")
+    # idx html must reflect per-lock automation, not the old per-owner Lock-Maxi-only column
+    try:
+        idxh=open("index.html").read()
+        check("dashboard shows non-LockMaxi conduits (e.g. USDC/Bitcoin/Bluechips)",
+              any(s in idxh for s in ('"USDC"','"Bitcoin"','"Bluechips"')) , "no other conduit names embedded")
+    except FileNotFoundError: pass
+
 print(f"\n{'='*56}\nQA: {PASSES} passed, {len(WARNS)} warned, {len(FAILS)} FAILED")
 if FAILS:
     print("BLOCKED — do not publish:"); [print("  -",f) for f in FAILS]; sys.exit(1)

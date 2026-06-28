@@ -31,24 +31,33 @@ for r in R:
     r["earn_delta"]=round(r["delta_last"]*EARN_FACTOR) if r.get("delta_last") is not None else None
 # Per-veNFT table rows (top 500 individual locks; treasury genesis lock #1 excluded like before).
 try:
-    _TOPV=json.load(open("top500_venfts.json")); _BEHV={k.lower():v for k,v in json.load(open("venft_owner_behavior.json")).items()}
+    _TOPV=json.load(open("top500_venfts.json"))
     try: _CONS={k.lower():v for k,v in json.load(open("venft_consistency.json")).items()}
     except FileNotFoundError: _CONS={}
+    try: _DEL=json.load(open("venft_delegatee.json"))
+    except FileNotFoundError: _DEL={"locks":{},"voters":{}}
+    _DLOCK=_DEL.get("locks",{}); _DVOTER={k.lower():v for k,v in _DEL.get("voters",{}).items()}
     _vr=[]
     for x in _TOPV:
         if int(x["tokenId"])==1: continue   # treasury genesis lock — excluded
-        o=x["owner"].lower(); b=_BEHV.get(o,{}); cn=_CONS.get(o,{}); earn=round(x["power"]/1e18*EARN_FACTOR)
+        o=x["owner"].lower(); cn=_CONS.get(o,{}); earn=round(x["power"]/1e18*EARN_FACTOR)
+        dl=_DLOCK.get(str(x["tokenId"]),{}); kind=dl.get("kind","manual"); voter=(dl.get("voter") or o).lower()
+        # the lock is voted by its delegatee: a conduit / a personal delegate / the owner (manual)
+        if kind in ("conduit","delegated"):
+            vc=_DVOTER.get(voter,{}); style=vc.get("style","—"); dom=vc.get("dom_pool"); tp=vc.get("top_pools") or []; lve=None
+        else:
+            style=cn.get("style","—"); dom=cn.get("dom_pool"); tp=cn.get("top_pools") or []; lve=cn.get("last_voted_ep")
+        autlabel = dl.get("conduit_name") if kind=="conduit" else ("Delegated" if kind=="delegated" else "Manual")
         _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
             "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
-            "style":cn.get("style","—"),"dom_pool":cn.get("dom_pool"),"top_pools":cn.get("top_pools") or [],
-            "last_voted_ep":cn.get("last_voted_ep"),
-            "automated":bool(b.get("automated")),"strategy":b.get("strategy")})
+            "style":style,"dom_pool":dom,"top_pools":tp,"last_voted_ep":lve,
+            "kind":kind,"automated":kind=="conduit","strategy":autlabel})
     for i,r in enumerate(_vr,1): r["rank"]=i
     HAS_VENFT=bool(_vr)
 except FileNotFoundError:
     _vr=[]; HAS_VENFT=False
 VROWS=json.dumps(_vr)
-N_VAUTO=sum(1 for r in _vr if r["automated"]); N_VOWNERS=len({r["owner"].lower() for r in _vr})
+N_VAUTO=sum(1 for r in _vr if r["automated"]); N_VMANUAL=sum(1 for r in _vr if r["kind"]=="manual"); N_VOWNERS=len({r["owner"].lower() for r in _vr})
 team=sum(r["vehydx"] for r in R if r["entity_type"]=="hydrex_treasury_or_team")
 managed=sum(r["vehydx"] for r in R if r["entity_type"]=="managed_lock")
 hydrex_ctrl = TREASURY_PCT + team/TOTAL*100          # verified Hydrex only (treasury + signer team)
@@ -91,7 +100,7 @@ DATA=json.dumps({"total":TOTAL,"holders":HOLDERS,"treasury_pct":TREASURY_PCT,"ma
                  "hydrex_ctrl":round(hydrex_ctrl,1),"top100_pct":round(top100sum/TOTAL*100,1),
                  "epoch":CUR_EPOCH,"epoch_range":EPOCH_RANGE,"earning_total":EARN_TOTAL,
                  "styles":dict(style_ct),"modes":dict(mode_ct),"has_holdings":bool(EPN),"has_staker":HAS_STAKER,"has_earn":HAS_EARN,
-                 "n_vauto":N_VAUTO,"n_vowners":N_VOWNERS,"has_venft":HAS_VENFT})
+                 "n_vauto":N_VAUTO,"n_vmanual":N_VMANUAL,"n_vowners":N_VOWNERS,"has_venft":HAS_VENFT})
 
 html = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
@@ -169,7 +178,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
-<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. <b>Votes for</b> = the owner's voting <i>pattern over the last 10 epochs</i>: a <b>pool name</b> = they back it consistently (same pool, or a stable 1-3 set) &middot; <span class="brd">fee-max</span> = they switch pools epoch to epoch / spray many (mercenary) &middot; <i>no active vote</i> = voted earlier in-window but holds no current gauge vote (often an auto-compounding lock) &middot; <i>did not vote</i> = no vote in the last 10 epochs (verified against <code>lastVoted</code>). <b>Automation</b> = owner uses a Hydrex conduit (<span class="md md-Automated">Lock Maxi</span> auto-compounds; doesn't change the vote — only Lock Maxi is detectable on-chain so far).<br>
+<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. Each lock is voted by its <b>delegatee</b> (<code>getLockDelegatee</code>): the owner itself (<i>manual</i>), a Hydrex automation <span class="md md-Automated">conduit</span>, or a personal <i>delegated</i> wallet. <b>Automation</b> = the exact conduit/strategy the lock is enrolled in (e.g. <span class="md md-Automated">USDC</span>, <span class="md md-Automated">Bitcoin</span>, <span class="md md-Automated">Hydrex Lock Maxi</span>; the conduit name = the output asset the yield is paid in). <b>Votes for</b> = the <i>delegatee's</i> 10-epoch voting pattern: a <b>pool name</b> = backs it consistently (same pool / stable 1-3 set) &middot; <span class="brd">fee-max</span> = spreads / rotates pools to chase fees (most conduits vote a fee-max basket, shown beneath) &middot; <i>no active vote</i> / <i>did not vote</i> = no current gauge vote, verified against <code>lastVoted</code>.<br>
 Top 500 of ~846 active locks; locks &ge;30K veHYDX are complete, the bottom ~50 (19&ndash;30K) may omit a few peers. The charts below are protocol-level / per-wallet. Internal BD reference.
 </div>
 <script>
@@ -207,28 +216,30 @@ if(D.has_holdings){
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · <a href="https://basescan.org/address/${r.wallet}" target="_blank">${sc(r.wallet)}</a></span></div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> locks (treasury #1 excluded), by 10-epoch voting pattern &middot; <b style="color:var(--green)">${VROWS.filter(r=>r.style==='Same pool').length} same pool</b> &middot; <b style="color:var(--cyan)">${VROWS.filter(r=>r.style==='1-3 pools').length} 1-3 pools</b> &middot; <b style="color:var(--orange)">${VROWS.filter(r=>r.style==='Fee-max').length} fee-max</b> &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b>`;
+document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> locks (treasury #1 excluded) &middot; voted by the lock's delegatee &middot; <b style="color:var(--green)">${VROWS.filter(r=>r.style==='Same pool').length} same pool</b> &middot; <b style="color:var(--cyan)">${VROWS.filter(r=>r.style==='1-3 pools').length} 1-3 pools</b> &middot; <b style="color:var(--orange)">${VROWS.filter(r=>r.style==='Fee-max').length} fee-max</b> &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b> &middot; <b>${D.n_vmanual} manual</b>`;
 let modeFilter='All';
-const chips=[['All','All'],['Same pool','Same pool'],['1-3 pools','1-3 pools'],['Fee-max','Fee-max'],['Automated','Automated']];
-function chipCount(v){return v==='All'?VROWS.length:v==='Automated'?VROWS.filter(r=>r.automated).length:VROWS.filter(r=>r.style===v).length;}
+const chips=[['All','All'],['Same pool','Same pool'],['1-3 pools','1-3 pools'],['Fee-max','Fee-max'],['Automated','Automated'],['Manual','Manual']];
+function chipCount(v){return v==='All'?VROWS.length:v==='Automated'?VROWS.filter(r=>r.automated).length:v==='Manual'?VROWS.filter(r=>r.kind==='manual').length:VROWS.filter(r=>r.style===v).length;}
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl} <span style="opacity:.55">${chipCount(val)}</span></span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
 function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
- let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : r.style===modeFilter )
+ let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : modeFilter==='Manual' ? r.kind==='manual' : r.style===modeFilter )
    && (!q||(('#'+r.account)+' '+r.owner+' '+(r.top_pools||[]).join(' ')+' '+(r.style||'')+' '+(r.strategy||'')).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
   // consistency across the last 10 epochs: same pool / 1-3 pools / fee-max (switches)
   const tp=r.top_pools||[];
+  const conduit = r.kind==='conduit' || r.kind==='delegated';
   const votesFor = r.style==='Same pool' ? `<span class="brd">${r.dom_pool}</span>`
     : r.style==='1-3 pools' ? `<span class="brd">${tp[0]||r.dom_pool}</span>${tp.length>1?`<div class="sub2">${tp.slice(1).join(', ')}</div>`:''}`
-    : r.style==='Fee-max' ? `<span class="brd">fee-max</span><div class="sub2">switches pools</div>`
+    : r.style==='Fee-max' ? `<span class="brd">fee-max</span><div class="sub2">${conduit&&tp.length?tp.slice(0,3).join(', '):'switches pools'}</div>`
     : r.style==='No active vote' ? `<span class="brd" style="color:var(--muted)">no active vote</span>${r.last_voted_ep?`<div class="sub2">last voted ep ${r.last_voted_ep}</div>`:''}`
     : `<span class="brd" style="color:var(--muted)">did not vote</span>`;
-  const aut = r.automated ? `<span class="md md-Automated">${r.strategy||'Automated'}</span>` : `<span style="color:var(--muted)">—</span>`;
+  const aut = r.kind==='conduit' ? `<span class="md md-Automated">${r.strategy}</span>`
+    : `<span style="color:var(--muted)">${(r.strategy||'Manual').toLowerCase()}</span>`;
   return `<tr>
   <td class="n" style="color:var(--muted)">${r.rank}</td>
   <td style="font-weight:700;color:var(--cyan)">#${r.account}</td>

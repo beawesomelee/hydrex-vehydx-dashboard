@@ -28,6 +28,7 @@ python3 build_automation.py        # Manual vs Automated per wallet (isApprovedF
 python3 build_venft.py             # top 500 individual veNFT locks by power (enumerate owners >=30K)
 python3 build_venft_behavior.py    # each top-lock owner's current votes + automation conduit
 python3 build_venft_history.py     # per-owner 10-epoch voting consistency: Same pool / 1-3 pools / Fee-max (~12 min)
+python3 build_venft_delegatee.py   # per-LOCK voter via getLockDelegatee -> exact conduit/strategy + manual/delegated (~2 min)
 python3 synth.py                   # votes-for (breadth) + vote mode + Δ -> vehydx_top100_labeled.json
 python3 build_dashboard.py         # render -> vehydx_dashboard_plain.html
 cp vehydx_dashboard_plain.html index.html   # publish the plaintext root
