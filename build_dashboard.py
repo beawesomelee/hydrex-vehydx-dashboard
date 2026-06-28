@@ -37,23 +37,31 @@ try:
     try: _DEL=json.load(open("venft_delegatee.json"))
     except FileNotFoundError: _DEL={"locks":{},"voters":{}}
     _DLOCK=_DEL.get("locks",{}); _DVOTER={k.lower():v for k,v in _DEL.get("voters",{}).items()}
+    CONSIST_BAR=0.6   # a pool voted in >=60% of an account's epochs counts as "consistently backed"
     _vr=[]
     for x in _TOPV:
         if int(x["tokenId"])==1: continue   # treasury genesis lock — excluded
         o=x["owner"].lower(); cn=_CONS.get(o,{}); earn=round(x["power"]/1e18*EARN_FACTOR)
         dl=_DLOCK.get(str(x["tokenId"]),{}); kind=dl.get("kind","manual"); voter=(dl.get("voter") or o).lower()
-        # the lock is voted by its delegatee: a conduit / a personal delegate / the owner (manual)
-        if kind in ("conduit","delegated"):
-            vc=_DVOTER.get(voter,{}); style=vc.get("style","—"); dom=vc.get("dom_pool"); tp=vc.get("top_pools") or []; sp=vc.get("stable_pools") or []; lve=None
-        else:
-            style=cn.get("style","—"); dom=cn.get("dom_pool"); tp=cn.get("top_pools") or []; sp=cn.get("stable_pools") or []; lve=cn.get("last_voted_ep")
-        autlabel = dl.get("conduit_name") if kind=="conduit" else ("Delegated" if kind=="delegated" else "Manual")
-        # bucket = how the lock's vote is *chosen*: an automation strategy picks for conduit locks,
-        # so they don't get a pool-pattern bucket; only human-voted (manual/delegated) locks do.
-        bucket = "Automated" if kind=="conduit" else style
+        lve=None; backs=[]
+        if kind=="conduit":                      # an automation strategy picks the vote
+            style="Automated"; bucket="Automated"; autlabel=dl.get("conduit_name")
+        elif kind=="delegated":                  # voted by a personal wallet; pool detail is manual-only
+            vc=_DVOTER.get(voter,{}); style=vc.get("style","—"); bucket=style; autlabel="Delegated"
+        else:                                     # MANUAL — classify by the pools it CONSISTENTLY backs
+            autlabel="Manual"; sstyle=cn.get("style","—"); lve=cn.get("last_voted_ep")
+            if sstyle in ("No active vote","Did not vote","—"):
+                style=sstyle; bucket=sstyle
+            else:
+                share=cn.get("pool_share") or {}
+                backs=[p for p,sh in sorted(share.items(),key=lambda kv:-kv[1]) if sh>=CONSIST_BAR][:6]
+                if not backs:        style="Fee-max"; bucket="Fee-max"        # no pool voted consistently => switcher
+                elif len(backs)==1:  style="Same pool"; bucket="Same pool"    # always backs one pool
+                elif len(backs)<=3:  style="1-3 pools"; bucket="1-3 pools"    # always backs a small set
+                else:                style="Fee-max"; bucket="Fee-max"        # spreads, but always-includes shown
         _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
             "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
-            "style":style,"bucket":bucket,"dom_pool":dom,"top_pools":tp,"stable_pools":sp,"last_voted_ep":lve,
+            "style":style,"bucket":bucket,"backs":backs,"last_voted_ep":lve,
             "kind":kind,"automated":kind=="conduit","strategy":autlabel})
     for i,r in enumerate(_vr,1): r["rank"]=i
     HAS_VENFT=bool(_vr)
@@ -181,7 +189,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
-<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. Each lock is voted by its <b>delegatee</b> (<code>getLockDelegatee</code>): the owner itself (<i>manual</i>), a Hydrex automation <span class="md md-Automated">conduit</span>, or a personal <i>delegated</i> wallet. <b>Automation</b> = the exact conduit/strategy the lock is enrolled in (e.g. <span class="md md-Automated">USDC</span>, <span class="md md-Automated">Bitcoin</span>, <span class="md md-Automated">Hydrex Lock Maxi</span>; the conduit name = the output asset the yield is paid in). <b>Votes for</b> shows the pool pick only when a human steers the lock: <i>automated</i> locks just read <i>automation</i> (the strategy chooses — see the conduit in the Automation column), while <b>manual</b> &amp; <b>delegated</b> locks show their actual 10-epoch pattern — a <b>pool name</b> = backs it consistently (same pool / stable 1-3 set) &middot; <span class="brd">fee-max</span> = spreads / rotates pools to chase fees &middot; <i>no active vote</i> / <i>did not vote</i> = no current gauge vote, verified against <code>lastVoted</code>.<br>
+<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. Each lock is voted by its <b>delegatee</b> (<code>getLockDelegatee</code>): the owner itself (<i>manual</i>), a Hydrex automation <span class="md md-Automated">conduit</span>, or a personal <i>delegated</i> wallet. <b>Automation</b> = the exact conduit/strategy the lock is enrolled in (e.g. <span class="md md-Automated">USDC</span>, <span class="md md-Automated">Bitcoin</span>, <span class="md md-Automated">Hydrex Lock Maxi</span>; the conduit name = the output asset the yield is paid in). <b>Votes for</b> identifies a <b>manual</b> lock by the pool(s) it <i>consistently backs</i> — every pool it votes in &ge;60% of its last-10-epoch ballots: <b>1 pool</b> = same-pool backer, <b>2&ndash;3 pools</b> = a small set, and an account with no pool that consistent (a true switcher) reads <span class="brd">fee-max</span> (with its always-included pools shown beneath if it has any). <i>Automated</i> locks read <i>automation</i> (the conduit chooses — see the Automation column); <i>delegated</i> locks are voted by a personal wallet. <i>no active vote</i> / <i>did not vote</i> = no current gauge vote, verified against <code>lastVoted</code>.<br>
 Top 500 of ~846 active locks; locks &ge;30K veHYDX are complete, the bottom ~50 (19&ndash;30K) may omit a few peers. The charts below are protocol-level / per-wallet. Internal BD reference.
 </div>
 <script>
@@ -230,17 +238,18 @@ function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
  let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : modeFilter==='Manual' ? r.kind==='manual' : r.bucket===modeFilter )
-   && (!q||(('#'+r.account)+' '+r.owner+' '+(r.top_pools||[]).join(' ')+' '+(r.style||'')+' '+(r.strategy||'')).toLowerCase().includes(q)));
+   && (!q||(('#'+r.account)+' '+r.owner+' '+(r.backs||[]).join(' ')+' '+(r.style||'')+' '+(r.strategy||'')).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
   // consistency across the last 10 epochs: same pool / 1-3 pools / fee-max (switches)
-  const tp=r.top_pools||[];
-  // automated locks: the conduit/strategy picks the vote -> show "automation" (strategy is in the Automation col).
-  // human-voted locks (manual / personal-delegate): show the actual pools they back.
+  const b=r.backs||[];
+  // conduit -> the automation picks; delegated -> a personal wallet picks (pool detail is manual-only);
+  // manual -> the pools it CONSISTENTLY backs are its identity; only a true switcher reads "fee-max".
   const votesFor = r.kind==='conduit' ? `<span style="color:var(--muted)">automation</span>`
-    : r.style==='Same pool' ? `<span class="brd">${r.dom_pool}</span>`
-    : r.style==='1-3 pools' ? `<span class="brd">${tp[0]||r.dom_pool}</span>${tp.length>1?`<div class="sub2">${tp.slice(1).join(', ')}</div>`:''}`
-    : r.style==='Fee-max' ? `<span class="brd">fee-max</span>${(r.stable_pools&&r.stable_pools.length)?`<div class="sub2">always ${r.stable_pools.join(', ')}</div>`:''}`
+    : r.kind==='delegated' ? `<span style="color:var(--muted)">${(r.style||'—').toLowerCase()}</span>`
+    : r.style==='Same pool' ? `<span class="brd">${b[0]||''}</span>`
+    : r.style==='1-3 pools' ? `<span class="brd">${b[0]||''}</span>${b.length>1?`<div class="sub2">${b.slice(1).join(', ')}</div>`:''}`
+    : r.style==='Fee-max' ? `<span class="brd">fee-max</span>${b.length?`<div class="sub2">always ${b.join(', ')}</div>`:''}`
     : r.style==='No active vote' ? `<span class="brd" style="color:var(--muted)">no active vote</span>${r.last_voted_ep?`<div class="sub2">last voted ep ${r.last_voted_ep}</div>`:''}`
     : `<span class="brd" style="color:var(--muted)">did not vote</span>`;
   const aut = r.kind==='conduit' ? `<span class="md md-Automated">${r.strategy}</span>`

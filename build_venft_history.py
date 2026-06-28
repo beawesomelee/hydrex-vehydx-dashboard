@@ -124,10 +124,13 @@ def classify(d, lvt):
         else: style="Fee-max"
         top=[p for p,_ in cnt.most_common(3)]
         # stable core = pools voted in >=80% of voted epochs (needs >=3 epochs to claim consistency).
-        # for a Fee-max account this is what they back EVERY epoch despite spreading; empty => they switch.
         stable=[p for p,c in pep.most_common() if nep>=3 and c>=0.8*nep][:4]
-        return {"style":style,"dom_pool":dom,"top_pools":top,"stable_pools":stable,"avg_pools":round(avg,1),
-                "epochs_voted":nep,"distinct":distinct,"last_voted_ep":(ep_of(lvt) if lvt else None)}
+        # pool_share = fraction of voted epochs each pool appears in (>=40% kept) — lets the dashboard
+        # threshold "consistently votes this pool" at any bar without re-scanning. These are what the
+        # account BACKS; a pure switcher has none.
+        share={p:round(c/nep,2) for p,c in pep.most_common() if nep>=2 and c/nep>=0.4}
+        return {"style":style,"dom_pool":dom,"top_pools":top,"stable_pools":stable,"pool_share":share,
+                "avg_pools":round(avg,1),"epochs_voted":nep,"distinct":distinct,"last_voted_ep":(ep_of(lvt) if lvt else None)}
     # no standing vote at any sample (incl. current): split idle vs voted-then-passive via lastVoted
     if lvt and lvt>=WIN_START:
         return {"style":"No active vote","dom_pool":None,"top_pools":[],"avg_pools":0,
