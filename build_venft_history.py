@@ -112,16 +112,22 @@ print(f"  current @latest: {sum(1 for w in owners if 'cur' in ep_pools[w])}/{len
 def classify(d, lvt):
     voted=[v for v in d.values()]
     if voted:
-        avg=sum(v["n"] for v in voted)/len(voted)
+        nep=len(voted); avg=sum(v["n"] for v in voted)/nep
         cnt=Counter(p for v in voted for p in v["pools"])
+        pep=Counter()                         # epochs each pool appears in (set per epoch)
+        for v in voted:
+            for p in set(v["pools"]): pep[p]+=1
         distinct=len(cnt); dom,domc=cnt.most_common(1)[0] if cnt else (None,0)
-        dom_share=domc/len(voted)
+        dom_share=domc/nep
         if avg<=1.5 and dom_share>=0.8 and distinct<=2: style="Same pool"
         elif avg<=3.5 and dom_share>=0.5 and distinct<=5: style="1-3 pools"
         else: style="Fee-max"
         top=[p for p,_ in cnt.most_common(3)]
-        return {"style":style,"dom_pool":dom,"top_pools":top,"avg_pools":round(avg,1),
-                "epochs_voted":len(voted),"distinct":distinct,"last_voted_ep":(ep_of(lvt) if lvt else None)}
+        # stable core = pools voted in >=80% of voted epochs (needs >=3 epochs to claim consistency).
+        # for a Fee-max account this is what they back EVERY epoch despite spreading; empty => they switch.
+        stable=[p for p,c in pep.most_common() if nep>=3 and c>=0.8*nep][:4]
+        return {"style":style,"dom_pool":dom,"top_pools":top,"stable_pools":stable,"avg_pools":round(avg,1),
+                "epochs_voted":nep,"distinct":distinct,"last_voted_ep":(ep_of(lvt) if lvt else None)}
     # no standing vote at any sample (incl. current): split idle vs voted-then-passive via lastVoted
     if lvt and lvt>=WIN_START:
         return {"style":"No active vote","dom_pool":None,"top_pools":[],"avg_pools":0,

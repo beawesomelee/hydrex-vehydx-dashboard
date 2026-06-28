@@ -44,16 +44,16 @@ try:
         dl=_DLOCK.get(str(x["tokenId"]),{}); kind=dl.get("kind","manual"); voter=(dl.get("voter") or o).lower()
         # the lock is voted by its delegatee: a conduit / a personal delegate / the owner (manual)
         if kind in ("conduit","delegated"):
-            vc=_DVOTER.get(voter,{}); style=vc.get("style","—"); dom=vc.get("dom_pool"); tp=vc.get("top_pools") or []; lve=None
+            vc=_DVOTER.get(voter,{}); style=vc.get("style","—"); dom=vc.get("dom_pool"); tp=vc.get("top_pools") or []; sp=vc.get("stable_pools") or []; lve=None
         else:
-            style=cn.get("style","—"); dom=cn.get("dom_pool"); tp=cn.get("top_pools") or []; lve=cn.get("last_voted_ep")
+            style=cn.get("style","—"); dom=cn.get("dom_pool"); tp=cn.get("top_pools") or []; sp=cn.get("stable_pools") or []; lve=cn.get("last_voted_ep")
         autlabel = dl.get("conduit_name") if kind=="conduit" else ("Delegated" if kind=="delegated" else "Manual")
         # bucket = how the lock's vote is *chosen*: an automation strategy picks for conduit locks,
         # so they don't get a pool-pattern bucket; only human-voted (manual/delegated) locks do.
         bucket = "Automated" if kind=="conduit" else style
         _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
             "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
-            "style":style,"bucket":bucket,"dom_pool":dom,"top_pools":tp,"last_voted_ep":lve,
+            "style":style,"bucket":bucket,"dom_pool":dom,"top_pools":tp,"stable_pools":sp,"last_voted_ep":lve,
             "kind":kind,"automated":kind=="conduit","strategy":autlabel})
     for i,r in enumerate(_vr,1): r["rank"]=i
     HAS_VENFT=bool(_vr)
@@ -240,7 +240,7 @@ function render(){
   const votesFor = r.kind==='conduit' ? `<span style="color:var(--muted)">automation</span>`
     : r.style==='Same pool' ? `<span class="brd">${r.dom_pool}</span>`
     : r.style==='1-3 pools' ? `<span class="brd">${tp[0]||r.dom_pool}</span>${tp.length>1?`<div class="sub2">${tp.slice(1).join(', ')}</div>`:''}`
-    : r.style==='Fee-max' ? `<span class="brd">fee-max</span><div class="sub2">${tp.length?tp.slice(0,3).join(', '):'switches pools'}</div>`
+    : r.style==='Fee-max' ? `<span class="brd">fee-max</span>${(r.stable_pools&&r.stable_pools.length)?`<div class="sub2">always ${r.stable_pools.join(', ')}</div>`:''}`
     : r.style==='No active vote' ? `<span class="brd" style="color:var(--muted)">no active vote</span>${r.last_voted_ep?`<div class="sub2">last voted ep ${r.last_voted_ep}</div>`:''}`
     : `<span class="brd" style="color:var(--muted)">did not vote</span>`;
   const aut = r.kind==='conduit' ? `<span class="md md-Automated">${r.strategy}</span>`

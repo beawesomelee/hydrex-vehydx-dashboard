@@ -107,13 +107,17 @@ for K,BLK in blocks.items():
         if n: ep_pools[w][K]={"n":n,"pools":by.get(w,[])}
 def classify(d):
     voted=list(d.values())
-    if not voted: return {"style":"No active vote","dom_pool":None,"top_pools":[]}
-    avg=sum(v["n"] for v in voted)/len(voted); cnt=Counter(p for v in voted for p in v["pools"])
-    distinct=len(cnt); dom,domc=cnt.most_common(1)[0] if cnt else (None,0); dom_share=domc/len(voted)
+    if not voted: return {"style":"No active vote","dom_pool":None,"top_pools":[],"stable_pools":[]}
+    nep=len(voted); avg=sum(v["n"] for v in voted)/nep; cnt=Counter(p for v in voted for p in v["pools"])
+    pep=Counter()
+    for v in voted:
+        for p in set(v["pools"]): pep[p]+=1
+    distinct=len(cnt); dom,domc=cnt.most_common(1)[0] if cnt else (None,0); dom_share=domc/nep
     if avg<=1.5 and dom_share>=0.8 and distinct<=2: style="Same pool"
     elif avg<=3.5 and dom_share>=0.5 and distinct<=5: style="1-3 pools"
     else: style="Fee-max"
-    return {"style":style,"dom_pool":dom,"top_pools":[p for p,_ in cnt.most_common(3)]}
+    stable=[p for p,c in pep.most_common() if nep>=3 and c>=0.8*nep][:4]   # pools voted in >=80% of epochs
+    return {"style":style,"dom_pool":dom,"top_pools":[p for p,_ in cnt.most_common(3)],"stable_pools":stable}
 voters={}
 for w in extra:
     c=classify(ep_pools[w]); c["is_conduit"]=w in CADDR; c["conduit_name"]=CADDR[w]["name"] if w in CADDR else None
