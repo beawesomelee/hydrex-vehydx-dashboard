@@ -131,6 +131,29 @@ if R and any(r.get("holdings") for r in R):
 else:
     check("holdings history present (optional feature)", True, warn=True)
 
+print("\n== G. per-veNFT voting consistency (regression: false 'did not vote') ==")
+CONS=load("venft_consistency.json"); BEH=load("venft_owner_behavior.json"); TOPV=None
+try: TOPV=json.load(open("top500_venfts.json"))
+except Exception: pass
+if CONS is not None and BEH is not None:
+    cons={k.lower():v for k,v in CONS.items()}; beh={k.lower():v for k,v in BEH.items()}
+    VALID={"Same pool","1-3 pools","Fee-max","No active vote","Did not vote","—"}
+    bad_style=[w for w,v in cons.items() if v.get("style") not in VALID]
+    check("consistency styles all valid", not bad_style, f"{bad_style[:3]}")
+    IDLE={"Did not vote","No active vote","—"}
+    # the exact bug Austin caught: an owner with a LIVE current vote must never read as idle
+    live_idle=[w for w,v in cons.items()
+               if v.get("style") in IDLE and (beh.get(w,{}) or {}).get("cur_targets")]
+    check("no owner with a live cur_targets vote is labelled idle (false 'did not vote')",
+          not live_idle, f"{len(live_idle)} owners e.g. {live_idle[:3]}")
+    if TOPV:
+        novote_owners={w for w,v in cons.items() if v.get("style") in IDLE}
+        novote_locks=[x for x in TOPV if x["owner"].lower() in novote_owners and int(x["tokenId"])!=1]
+        # silent-RPC-failure idle wall: if a huge share read idle, suspect a scan failure
+        share=len(novote_owners)/max(1,len(cons))
+        check("idle share is plausible (not a silent-RPC idle wall, <60% of owners)",
+              share<0.60, f"{share*100:.0f}% of owners read idle")
+
 print(f"\n{'='*56}\nQA: {PASSES} passed, {len(WARNS)} warned, {len(FAILS)} FAILED")
 if FAILS:
     print("BLOCKED — do not publish:"); [print("  -",f) for f in FAILS]; sys.exit(1)

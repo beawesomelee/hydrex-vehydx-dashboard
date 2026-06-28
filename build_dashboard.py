@@ -41,6 +41,7 @@ try:
         _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
             "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
             "style":cn.get("style","—"),"dom_pool":cn.get("dom_pool"),"top_pools":cn.get("top_pools") or [],
+            "last_voted_ep":cn.get("last_voted_ep"),
             "automated":bool(b.get("automated")),"strategy":b.get("strategy")})
     for i,r in enumerate(_vr,1): r["rank"]=i
     HAS_VENFT=bool(_vr)
@@ -168,7 +169,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
-<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. <b>Votes for</b> = the owner's voting <i>pattern over the last 10 epochs</i>: a <b>pool name</b> = they back it consistently (same pool, or a stable 1-3 set) &middot; <span class="brd">fee-max</span> = they switch pools epoch to epoch / spray many (mercenary) &middot; <i>did not vote</i> = no vote in 10 epochs. <b>Automation</b> = owner uses a Hydrex conduit (<span class="md md-Automated">Lock Maxi</span> auto-compounds; doesn't change the vote — only Lock Maxi is detectable on-chain so far).<br>
+<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. <b>Votes for</b> = the owner's voting <i>pattern over the last 10 epochs</i>: a <b>pool name</b> = they back it consistently (same pool, or a stable 1-3 set) &middot; <span class="brd">fee-max</span> = they switch pools epoch to epoch / spray many (mercenary) &middot; <i>no active vote</i> = voted earlier in-window but holds no current gauge vote (often an auto-compounding lock) &middot; <i>did not vote</i> = no vote in the last 10 epochs (verified against <code>lastVoted</code>). <b>Automation</b> = owner uses a Hydrex conduit (<span class="md md-Automated">Lock Maxi</span> auto-compounds; doesn't change the vote — only Lock Maxi is detectable on-chain so far).<br>
 Top 500 of ~846 active locks; locks &ge;30K veHYDX are complete, the bottom ~50 (19&ndash;30K) may omit a few peers. The charts below are protocol-level / per-wallet. Internal BD reference.
 </div>
 <script>
@@ -225,6 +226,7 @@ function render(){
   const votesFor = r.style==='Same pool' ? `<span class="brd">${r.dom_pool}</span>`
     : r.style==='1-3 pools' ? `<span class="brd">${tp[0]||r.dom_pool}</span>${tp.length>1?`<div class="sub2">${tp.slice(1).join(', ')}</div>`:''}`
     : r.style==='Fee-max' ? `<span class="brd">fee-max</span><div class="sub2">switches pools</div>`
+    : r.style==='No active vote' ? `<span class="brd" style="color:var(--muted)">no active vote</span>${r.last_voted_ep?`<div class="sub2">last voted ep ${r.last_voted_ep}</div>`:''}`
     : `<span class="brd" style="color:var(--muted)">did not vote</span>`;
   const aut = r.automated ? `<span class="md md-Automated">${r.strategy||'Automated'}</span>` : `<span style="color:var(--muted)">—</span>`;
   return `<tr>
