@@ -48,9 +48,12 @@ try:
         else:
             style=cn.get("style","—"); dom=cn.get("dom_pool"); tp=cn.get("top_pools") or []; lve=cn.get("last_voted_ep")
         autlabel = dl.get("conduit_name") if kind=="conduit" else ("Delegated" if kind=="delegated" else "Manual")
+        # bucket = how the lock's vote is *chosen*: an automation strategy picks for conduit locks,
+        # so they don't get a pool-pattern bucket; only human-voted (manual/delegated) locks do.
+        bucket = "Automated" if kind=="conduit" else style
         _vr.append({"account":x["tokenId"],"owner":x["owner"],"earn":earn,
             "earn_pct":round(earn/EARN_TOTAL*100,3) if EARN_TOTAL else 0,
-            "style":style,"dom_pool":dom,"top_pools":tp,"last_voted_ep":lve,
+            "style":style,"bucket":bucket,"dom_pool":dom,"top_pools":tp,"last_voted_ep":lve,
             "kind":kind,"automated":kind=="conduit","strategy":autlabel})
     for i,r in enumerate(_vr,1): r["rank"]=i
     HAS_VENFT=bool(_vr)
@@ -169,7 +172,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
     <th>Votes for</th>
     <th onclick="sort('automated')">Automation</th>
   </tr></thead><tbody id="tb"></tbody></table></div>
-  <div class="sub2" style="margin-top:10px">* Each row is one veHYDX lock (veNFT); <b>Account #</b> = its token ID, ranked by the lock's own power. The treasury genesis lock (<b>Account #1</b>, <a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>) is excluded &mdash; it parks its vote in a sink and earns nothing. Votes &amp; automation are per-owner.</div>
+  <div class="sub2" style="margin-top:10px">* Each row is one veHYDX lock (veNFT); <b>Account #</b> = its token ID, ranked by the lock's own power. The treasury genesis lock (<b>Account #1</b>, <a href="https://basescan.org/address/0xd9e966a6bfa2ae2113a34bb4dd02ded921da50af" target="_blank">0xd9e9&hellip;50af</a>) is excluded &mdash; it parks its vote in a sink and earns nothing. Votes &amp; automation are resolved per-lock via its delegatee.</div>
 </div>
 <div class="panel" id="areaPanel" style="margin-bottom:20px"><h3>veHYDX holdings over epochs</h3><div class="hint">each line = one holder's veHYDX balance (not votes) &middot; top 12 + everyone else (top 100), last 10 epochs &mdash; who is accumulating vs unwinding</div><div style="position:relative;height:300px"><canvas id="area"></canvas></div></div>
 <div class="row2" id="trends">
@@ -178,7 +181,7 @@ input{background:#0d1117;border:1px solid var(--border);color:var(--text);paddin
 </div>
 <div class="panel" style="margin-bottom:20px"><h3>Single Pool Voters</h3><div class="hint">wallets that commit all their veHYDX to one pool, and which pool</div><div id="backers"></div></div>
 <div class="foot">
-<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. Each lock is voted by its <b>delegatee</b> (<code>getLockDelegatee</code>): the owner itself (<i>manual</i>), a Hydrex automation <span class="md md-Automated">conduit</span>, or a personal <i>delegated</i> wallet. <b>Automation</b> = the exact conduit/strategy the lock is enrolled in (e.g. <span class="md md-Automated">USDC</span>, <span class="md md-Automated">Bitcoin</span>, <span class="md md-Automated">Hydrex Lock Maxi</span>; the conduit name = the output asset the yield is paid in). <b>Votes for</b> = the <i>delegatee's</i> 10-epoch voting pattern: a <b>pool name</b> = backs it consistently (same pool / stable 1-3 set) &middot; <span class="brd">fee-max</span> = spreads / rotates pools to chase fees (most conduits vote a fee-max basket, shown beneath) &middot; <i>no active vote</i> / <i>did not vote</i> = no current gauge vote, verified against <code>lastVoted</code>.<br>
+<b>Account #</b> = the veNFT token ID (Hydrex's account id); ranked by the lock's own power. Each lock is voted by its <b>delegatee</b> (<code>getLockDelegatee</code>): the owner itself (<i>manual</i>), a Hydrex automation <span class="md md-Automated">conduit</span>, or a personal <i>delegated</i> wallet. <b>Automation</b> = the exact conduit/strategy the lock is enrolled in (e.g. <span class="md md-Automated">USDC</span>, <span class="md md-Automated">Bitcoin</span>, <span class="md md-Automated">Hydrex Lock Maxi</span>; the conduit name = the output asset the yield is paid in). <b>Votes for</b> shows the pool pick only when a human steers the lock: <i>automated</i> locks just read <i>automation</i> (the strategy chooses — see the conduit in the Automation column), while <b>manual</b> &amp; <b>delegated</b> locks show their actual 10-epoch pattern — a <b>pool name</b> = backs it consistently (same pool / stable 1-3 set) &middot; <span class="brd">fee-max</span> = spreads / rotates pools to chase fees &middot; <i>no active vote</i> / <i>did not vote</i> = no current gauge vote, verified against <code>lastVoted</code>.<br>
 Top 500 of ~846 active locks; locks &ge;30K veHYDX are complete, the bottom ~50 (19&ndash;30K) may omit a few peers. The charts below are protocol-level / per-wallet. Internal BD reference.
 </div>
 <script>
@@ -216,26 +219,28 @@ if(D.has_holdings){
 }else{document.getElementById('areaPanel').style.display='none';}
 const bk=ROWS.filter(r=>r.voting_style==='Anchored').sort((a,b)=>b.vehydx-a.vehydx).slice(0,12);
 document.getElementById('backers').innerHTML=bk.map(r=>`<div class="pill"><b>${r.dom_pool}</b> <span class="m">${VE(r.earn)} · <a href="https://basescan.org/address/${r.wallet}" target="_blank">${sc(r.wallet)}</a></span></div>`).join('')||'—';
-document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> locks (treasury #1 excluded) &middot; voted by the lock's delegatee &middot; <b style="color:var(--green)">${VROWS.filter(r=>r.style==='Same pool').length} same pool</b> &middot; <b style="color:var(--cyan)">${VROWS.filter(r=>r.style==='1-3 pools').length} 1-3 pools</b> &middot; <b style="color:var(--orange)">${VROWS.filter(r=>r.style==='Fee-max').length} fee-max</b> &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b> &middot; <b>${D.n_vmanual} manual</b>`;
+document.getElementById('styleline').innerHTML=`top <b>${VROWS.length}</b> locks (treasury #1 excluded) &middot; <b style="color:var(--purple)">${D.n_vauto} automated</b> (strategy picks the vote) &middot; <b>${D.n_vmanual} manual</b> &middot; of the human-voted: <b style="color:var(--green)">${VROWS.filter(r=>r.bucket==='Same pool').length} same pool</b> &middot; <b style="color:var(--cyan)">${VROWS.filter(r=>r.bucket==='1-3 pools').length} 1-3 pools</b> &middot; <b style="color:var(--orange)">${VROWS.filter(r=>r.bucket==='Fee-max').length} fee-max</b>`;
 let modeFilter='All';
-const chips=[['All','All'],['Same pool','Same pool'],['1-3 pools','1-3 pools'],['Fee-max','Fee-max'],['Automated','Automated'],['Manual','Manual']];
-function chipCount(v){return v==='All'?VROWS.length:v==='Automated'?VROWS.filter(r=>r.automated).length:v==='Manual'?VROWS.filter(r=>r.kind==='manual').length:VROWS.filter(r=>r.style===v).length;}
+const chips=[['All','All'],['Automated','Automated'],['Manual','Manual'],['Same pool','Same pool'],['1-3 pools','1-3 pools'],['Fee-max','Fee-max']];
+function chipCount(v){return v==='All'?VROWS.length:v==='Automated'?VROWS.filter(r=>r.automated).length:v==='Manual'?VROWS.filter(r=>r.kind==='manual').length:VROWS.filter(r=>r.bucket===v).length;}
 function renderChips(){document.getElementById('chips').innerHTML=chips.map(([lbl,val])=>`<span class="chip ${val===modeFilter?'on':''}" onclick="setMode('${val}')">${lbl} <span style="opacity:.55">${chipCount(val)}</span></span>`).join('');}
 function setMode(v){modeFilter=v;renderChips();render();}
 let sk='rank',sd=1;
 function sort(k){sd=sk===k?-sd:1;sk=k;render();}
 function render(){
  const q=document.getElementById('q').value.toLowerCase();
- let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : modeFilter==='Manual' ? r.kind==='manual' : r.style===modeFilter )
+ let rows=VROWS.filter(r=>( modeFilter==='All' ? true : modeFilter==='Automated' ? r.automated : modeFilter==='Manual' ? r.kind==='manual' : r.bucket===modeFilter )
    && (!q||(('#'+r.account)+' '+r.owner+' '+(r.top_pools||[]).join(' ')+' '+(r.style||'')+' '+(r.strategy||'')).toLowerCase().includes(q)));
  rows.sort((a,b)=>{let x=a[sk],y=b[sk];return (typeof x==='number'?x-y:(''+x).localeCompare(''+y))*sd;});
  document.getElementById('tb').innerHTML=rows.map(r=>{
   // consistency across the last 10 epochs: same pool / 1-3 pools / fee-max (switches)
   const tp=r.top_pools||[];
-  const conduit = r.kind==='conduit' || r.kind==='delegated';
-  const votesFor = r.style==='Same pool' ? `<span class="brd">${r.dom_pool}</span>`
+  // automated locks: the conduit/strategy picks the vote -> show "automation" (strategy is in the Automation col).
+  // human-voted locks (manual / personal-delegate): show the actual pools they back.
+  const votesFor = r.kind==='conduit' ? `<span style="color:var(--muted)">automation</span>`
+    : r.style==='Same pool' ? `<span class="brd">${r.dom_pool}</span>`
     : r.style==='1-3 pools' ? `<span class="brd">${tp[0]||r.dom_pool}</span>${tp.length>1?`<div class="sub2">${tp.slice(1).join(', ')}</div>`:''}`
-    : r.style==='Fee-max' ? `<span class="brd">fee-max</span><div class="sub2">${conduit&&tp.length?tp.slice(0,3).join(', '):'switches pools'}</div>`
+    : r.style==='Fee-max' ? `<span class="brd">fee-max</span><div class="sub2">${tp.length?tp.slice(0,3).join(', '):'switches pools'}</div>`
     : r.style==='No active vote' ? `<span class="brd" style="color:var(--muted)">no active vote</span>${r.last_voted_ep?`<div class="sub2">last voted ep ${r.last_voted_ep}</div>`:''}`
     : `<span class="brd" style="color:var(--muted)">did not vote</span>`;
   const aut = r.kind==='conduit' ? `<span class="md md-Automated">${r.strategy}</span>`
